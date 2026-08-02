@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.filebrowser
 
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -23,9 +24,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarExitDirection
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
@@ -65,11 +63,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.DirFileSortOption
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.LibraryRefreshBox
 import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.openMetadataFor
+import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryBatchViewModel
@@ -396,6 +396,7 @@ private fun DirectoryListPane(
             selectedFiles = selectedFiles,
             canScrollToTop = canScrollToTop,
             listState = listState,
+            scrollBehavior = scrollBehavior,
             floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
             onFileClick = onNavigateToMetadata,
             onFileLongClick = onFileLongClick,
@@ -522,6 +523,7 @@ private fun DirectoryListBody(
     selectedFiles: Set<String>,
     canScrollToTop: Boolean,
     listState: LazyListState,
+    scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior? = null,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
@@ -546,19 +548,11 @@ private fun DirectoryListBody(
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            val pullToRefreshState = rememberPullToRefreshState()
-            PullToRefreshBox(
+            LibraryRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = onRefresh,
-                state = pullToRefreshState,
-                modifier = Modifier.fillMaxSize(),
-                indicator = {
-                    LoadingIndicator(
-                        state = pullToRefreshState,
-                        isRefreshing = isRefreshing,
-                        modifier = Modifier.align(Alignment.TopCenter)
-                    )
-                }
+                scrollBehavior = scrollBehavior,
+                modifier = Modifier.fillMaxSize()
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     DirectoryFileListContent(
@@ -870,23 +864,29 @@ private fun DirFileSortOption.labelResId(): Int = when (this) {
 
 @Composable
 fun DirectoryEmptyContent(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
+    AnimatedVisibility(
+        visible = true,
+        enter = ExpressiveAnimations.fadeEnter(),
+        modifier = modifier
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.outline
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = stringResource(R.string.no_audio_files_in_directory),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = stringResource(R.string.no_audio_files_in_directory),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

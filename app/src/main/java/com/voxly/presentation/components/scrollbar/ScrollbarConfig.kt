@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
  * - Spring stiffness following M3E Fast/L1 schemes
  *
  * Stiffness values are based on Material 3 Expressive Motion specifications:
- * - FastSpatial: stiffness = 1400 (for resizing/dimensions)
+ * - FastSpatial: stiffness = 800 (for resizing/dimensions)
  * - FastEffects: stiffness = 3800 (for color/opacity)
  *
  * @property thumbWidth Width of the scrollbar thumb in default state
@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
  * @property thumbElevation Elevation for thumb shadow
  * @property bubbleElevation Elevation for bubble shadow
  * @property bubbleHorizontalOffset Horizontal offset of bubble from scrollbar
- * @property thumbStiffness Spring stiffness for thumb width animation (FastSpatial: 1400)
+ * @property thumbStiffness Spring stiffness for thumb width animation (FastSpatial: 800)
  * @property visualFeedbackStiffness Spring stiffness for visual feedback (FastEffects: 3800)
  * @property thumbOffsetStiffness Spring stiffness for thumb position animation
  * @property velocityThreshold Minimum velocity to trigger inertia scroll on drag end
@@ -51,7 +51,7 @@ data class ScrollbarConfig(
     val thumbElevation: Dp = 2.dp,
     val bubbleElevation: Dp = 6.dp,
     val bubbleHorizontalOffset: Dp = 8.dp,
-    val thumbStiffness: Float = 1400f,
+    val thumbStiffness: Float = 800f,
     val visualFeedbackStiffness: Float = 3800f,
     val thumbOffsetStiffness: Float = 2000f,
     val velocityThreshold: Float = 500f

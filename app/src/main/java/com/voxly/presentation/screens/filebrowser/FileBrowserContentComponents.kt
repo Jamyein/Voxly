@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.filebrowser
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -13,9 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.toShape
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshState
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import com.voxly.presentation.components.LibraryRefreshBox
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,6 +32,7 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.components.RoleGradientBadge
 import com.voxly.presentation.components.rememberRoleAccentAt
+import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.scaleOnPress
 import com.voxly.presentation.viewmodel.SelectedDirectory
 
@@ -95,6 +95,7 @@ fun SelectionTopBar(
 /**
  * Content for directory overview.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DirectoryOverviewContent(
     directories: List<SelectedDirectory>,
@@ -103,23 +104,16 @@ fun DirectoryOverviewContent(
     isRefreshing: Boolean,
     isInitialLoad: Boolean = false,
     onRefresh: () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
     listState: LazyGridState? = null,
     bottomPadding: Dp = 0.dp
 ) {
     val gridState = listState ?: rememberLazyGridState()
-    val pullToRefreshState = rememberPullToRefreshState()
-    PullToRefreshBox(
+    LibraryRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
-        state = pullToRefreshState,
-        modifier = Modifier.fillMaxSize(),
-        indicator = {
-            androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator(
-                state = pullToRefreshState,
-                isRefreshing = isRefreshing,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-        }
+        scrollBehavior = scrollBehavior,
+        modifier = Modifier.fillMaxSize()
     ) {
         when {
             isInitialLoad -> {
@@ -166,12 +160,20 @@ fun DirectoryOverviewContent(
                         itemsIndexed(directories, key = { _, it -> it.uri }) { index, directory ->
                             val dirName = directory.path.substringAfterLast("/").substringAfterLast(":")
                             val files = directoryFiles[directory.uri].orEmpty()
-                            DirectoryItem(
-                                directory = directory,
-                                fileCount = files.size,
-                                index = index,
-                                onClick = { onOpenDirectory(directory.uri, dirName) }
-                            )
+                            Box(
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec = null,
+                                    fadeOutSpec = null,
+                                    placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                                )
+                            ) {
+                                DirectoryItem(
+                                    directory = directory,
+                                    fileCount = files.size,
+                                    index = index,
+                                    onClick = { onOpenDirectory(directory.uri, dirName) }
+                                )
+                            }
                         }
                     }
                 }
@@ -203,29 +205,34 @@ fun LoadingContent() {
  */
 @Composable
 fun EmptyContent() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+    AnimatedVisibility(
+        visible = true,
+        enter = ExpressiveAnimations.fadeEnter()
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                painter = appIconPainter(AppIcon.MusicNote),
-                contentDescription = stringResource(R.string.cd_no_files),
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.outline
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                stringResource(R.string.no_audio_files),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                stringResource(R.string.import_audio_files_or_select_folder),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline
-            )
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    painter = appIconPainter(AppIcon.MusicNote),
+                    contentDescription = stringResource(R.string.cd_no_files),
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    stringResource(R.string.no_audio_files),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.import_audio_files_or_select_folder),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
         }
     }
 }

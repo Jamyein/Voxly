@@ -69,8 +69,10 @@ import com.voxly.presentation.components.createAlbumTitleSharedElementKey
 import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.openMetadataFor
-import androidx.compose.animation.core.spring
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
+import com.voxly.presentation.theme.rememberSharedElementBoundsTransform
+import com.voxly.presentation.theme.rememberSharedElementTextBoundsTransform
+import com.voxly.presentation.theme.rememberSharedElementTitleBoundsTransform
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
@@ -228,7 +230,7 @@ fun AlbumDetailScreen(
                                         .sharedElement(
                                             rememberSharedContentState(key = albumCoverKey),
                                             animatedVisibilityScope = animatedVisibilityScope,
-                                            boundsTransform = { _, _ -> spring() }
+                                            boundsTransform = rememberSharedElementBoundsTransform()
                                         )
                                 }
                             } else {
@@ -267,7 +269,7 @@ fun AlbumDetailScreen(
                                     Modifier.sharedElement(
                                         rememberSharedContentState(key = albumTitleKey),
                                         animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = { _, _ -> spring() }
+                                        boundsTransform = rememberSharedElementTitleBoundsTransform()
                                     )
                                 }
                             } else Modifier
@@ -288,7 +290,7 @@ fun AlbumDetailScreen(
                                     Modifier.sharedElement(
                                         rememberSharedContentState(key = albumArtistKey),
                                         animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = { _, _ -> spring() }
+                                        boundsTransform = rememberSharedElementTextBoundsTransform()
                                     )
                                 }
                             } else Modifier

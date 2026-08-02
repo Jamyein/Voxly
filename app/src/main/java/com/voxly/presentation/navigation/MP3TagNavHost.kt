@@ -120,28 +120,33 @@ import timber.log.Timber
 /**
  * Main navigation host for the MP3 Tag Editor app using official Navigation3 APIs.
  */
-private val containerTransformMetadata = metadata {
-    put(NavDisplay.TransitionKey) {
-        ExpressiveAnimations.ContainerTransformSharedElementEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementExit
-    }
-    put(NavDisplay.PopTransitionKey) {
-        ExpressiveAnimations.ContainerTransformSharedElementPopEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementPopExit
-    }
-    put(NavDisplay.PredictivePopTransitionKey) {
-        ExpressiveAnimations.ContainerTransformSharedElementPredictiveBackEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementPredictiveBackExit
+@Composable
+private fun containerTransformMetadata(): Map<String, Any> {
+    val enter = ExpressiveAnimations.containerTransformSharedElementEnter()
+    val exit = ExpressiveAnimations.containerTransformSharedElementExit()
+    val popEnter = ExpressiveAnimations.containerTransformSharedElementPopEnter()
+    val popExit = ExpressiveAnimations.containerTransformSharedElementPopExit()
+    val predictiveBackEnter = ExpressiveAnimations.containerTransformSharedElementPredictiveBackEnter()
+    val predictiveBackExit = ExpressiveAnimations.containerTransformSharedElementPredictiveBackExit()
+    return metadata {
+        put(NavDisplay.TransitionKey) { enter togetherWith exit }
+        put(NavDisplay.PopTransitionKey) { popEnter togetherWith popExit }
+        put(NavDisplay.PredictivePopTransitionKey) { predictiveBackEnter togetherWith predictiveBackExit }
     }
 }
 
-private val sharedAxisXMetadata = metadata {
-    put(NavDisplay.TransitionKey) {
-        ExpressiveAnimations.SharedAxisXEnter togetherWith ExpressiveAnimations.SharedAxisXExit
-    }
-    put(NavDisplay.PopTransitionKey) {
-        ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
-    }
-    put(NavDisplay.PredictivePopTransitionKey) {
-        ExpressiveAnimations.ContainerTransformPredictiveBackEnter togetherWith
-        ExpressiveAnimations.ContainerTransformPredictiveBackExit
+@Composable
+private fun sharedAxisXMetadata(): Map<String, Any> {
+    val enter = ExpressiveAnimations.sharedAxisXEnter()
+    val exit = ExpressiveAnimations.sharedAxisXExit()
+    val popEnter = ExpressiveAnimations.sharedAxisXPopEnter()
+    val popExit = ExpressiveAnimations.sharedAxisXPopExit()
+    val predictiveBackEnter = ExpressiveAnimations.containerTransformPredictiveBackEnter()
+    val predictiveBackExit = ExpressiveAnimations.containerTransformPredictiveBackExit()
+    return metadata {
+        put(NavDisplay.TransitionKey) { enter togetherWith exit }
+        put(NavDisplay.PopTransitionKey) { popEnter togetherWith popExit }
+        put(NavDisplay.PredictivePopTransitionKey) { predictiveBackEnter togetherWith predictiveBackExit }
     }
 }
 
@@ -541,7 +546,7 @@ private fun MP3TagNavDisplay(
 
             entry<DirectoryContent>(
                 clazzContentKey = { key -> "DirectoryContent_${key.directoryUri}" },
-                metadata = sharedAxisXMetadata
+                metadata = sharedAxisXMetadata()
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 DirectoryContentAdaptiveScreen(
@@ -584,7 +589,7 @@ private fun MP3TagNavDisplay(
 
             entry<MetadataEditor>(
                 clazzContentKey = { key -> "MetadataEditor_${key.filePath}" },
-                metadata = containerTransformMetadata
+                metadata = containerTransformMetadata()
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 MetadataEditorEntry(
@@ -601,7 +606,7 @@ private fun MP3TagNavDisplay(
 
             entry<ReplayGainScanner>(
                 clazzContentKey = { key -> "ReplayGainScanner_${key.filePaths.hashCode()}" },
-                metadata = sharedAxisXMetadata
+                metadata = sharedAxisXMetadata()
             ) { key ->
                 ReplayGainScannerEntry(key, topLevelBackStack)
             }
@@ -629,21 +634,21 @@ private fun MP3TagNavDisplay(
 
             entry<LyricsSelector>(
                 clazzContentKey = { key -> "LyricsSelector_${key.filePath}" },
-                metadata = sharedAxisXMetadata
+                metadata = sharedAxisXMetadata()
             ) { key ->
                 LyricsSelectorEntry(key, topLevelBackStack)
             }
 
             entry<LyricsPoster>(
                 clazzContentKey = { key -> "LyricsPoster_${key.filePath}" },
-                metadata = sharedAxisXMetadata
+                metadata = sharedAxisXMetadata()
             ) { key ->
                 LyricsPosterEntry(key, topLevelBackStack)
             }
 
             entry<AlbumDetail>(
                 clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" },
-                metadata = containerTransformMetadata
+                metadata = containerTransformMetadata()
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 AlbumDetailEntry(
@@ -656,7 +661,7 @@ private fun MP3TagNavDisplay(
 
             entry<ArtistDetail>(
                 clazzContentKey = { key -> "ArtistDetail_${key.artistName}" },
-                metadata = containerTransformMetadata
+                metadata = containerTransformMetadata()
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 ArtistDetailEntry(

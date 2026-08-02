@@ -3,7 +3,6 @@ package com.voxly.presentation.screens.artist
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +42,8 @@ import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 
 import timber.log.Timber
 import com.voxly.presentation.theme.ExpressiveTypography
+import com.voxly.presentation.theme.rememberSharedElementBoundsTransform
+import com.voxly.presentation.theme.rememberSharedElementTextBoundsTransform
 import com.voxly.presentation.theme.MaterialShapes
 
 /**
@@ -87,7 +88,7 @@ fun HeroSection(
                     Modifier.sharedElement(
                         rememberSharedContentState(key = artistNameKey),
                         animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = { _, _ -> spring() }
+                        boundsTransform = rememberSharedElementTextBoundsTransform()
                     )
                 }
             } else Modifier

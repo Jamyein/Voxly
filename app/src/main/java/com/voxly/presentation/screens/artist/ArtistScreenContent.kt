@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.artist
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +55,7 @@ import com.voxly.presentation.components.LocalBottomBarVisibilityController
 import com.voxly.presentation.components.chainNestedScrollConnections
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
+import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
 
@@ -145,15 +148,21 @@ internal fun ArtistScreenContent(
         ) {
             LibraryRefreshBox(
                 isRefreshing = isRefreshing,
-                onRefresh = { viewModel.refresh() }
+                onRefresh = { viewModel.refresh() },
+                scrollBehavior = scrollBehavior
             ) {
                 if (artists.isEmpty() && !isRefreshing) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = stringResource(R.string.no_artists_found),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = ExpressiveAnimations.fadeEnter()
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = stringResource(R.string.no_artists_found),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 } else {
                     ArtistTabContent(
@@ -170,6 +179,7 @@ internal fun ArtistScreenContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ArtistTabContent(
     artists: List<ArtistGroup>,
@@ -214,12 +224,20 @@ internal fun ArtistTabContent(
                     val onItemClick = remember(targetArtist) {
                         { if (targetArtist != null) onArtistClick(targetArtist) }
                     }
-                    ArtistGridItem(
-                        artist = listItem,
-                        onClick = onItemClick,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
+                    Box(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = null,
+                            fadeOutSpec = null,
+                            placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                        )
+                    ) {
+                        ArtistGridItem(
+                            artist = listItem,
+                            onClick = onItemClick,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
                 }
             }
         }

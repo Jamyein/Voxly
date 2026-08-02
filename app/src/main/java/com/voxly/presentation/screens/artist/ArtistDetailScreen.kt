@@ -4,8 +4,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -134,7 +132,7 @@ fun ArtistDetailScreen(
                         AnimatedVisibility(
                             visible = showTitle,
                             enter = fadeIn(
-                                animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                             )
                         ) {
                             Text(
@@ -183,9 +181,9 @@ fun ArtistDetailScreen(
                     // Hero 区域：杂志大字报风格
                     item {
                         val enterAnimation = fadeIn(
-                            animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
                         ) + slideInVertically(
-                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                             initialOffsetY = { it / 4 }
                         )
 

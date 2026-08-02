@@ -158,8 +158,8 @@ fun OnlineLyricsSearchScreen(
                  item {
                      AnimatedVisibility(
                          visible = true,
-                         enter = ExpressiveAnimations.FadeEnter,
-                         exit = ExpressiveAnimations.FadeExit
+                         enter = ExpressiveAnimations.fadeEnter(),
+                         exit = ExpressiveAnimations.fadeExit()
                      ) {
                         Box(
                             modifier = Modifier
@@ -177,8 +177,8 @@ fun OnlineLyricsSearchScreen(
              item {
                  AnimatedVisibility(
                      visible = errorMessage != null,
-                     enter = ExpressiveAnimations.FadeEnter,
-                     exit = ExpressiveAnimations.FadeExit
+                     enter = ExpressiveAnimations.fadeEnter(),
+                     exit = ExpressiveAnimations.fadeExit()
                  ) {
                     errorMessage?.let { error ->
                         Surface(
@@ -203,8 +203,8 @@ fun OnlineLyricsSearchScreen(
                  item {
                       AnimatedVisibility(
                           visible = true,
-                          enter = ExpressiveAnimations.ListItemEnter,
-                          exit = ExpressiveAnimations.FadeExit
+                          enter = ExpressiveAnimations.listItemEnter(),
+                          exit = ExpressiveAnimations.fadeExit()
                       ) {
                          Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -226,8 +226,8 @@ fun OnlineLyricsSearchScreen(
                  items(lyricsResults, key = { it.id }) { item ->
                      AnimatedVisibility(
                          visible = true,
-                         enter = ExpressiveAnimations.ListItemEnter,
-                         exit = ExpressiveAnimations.FadeExit
+                         enter = ExpressiveAnimations.listItemEnter(),
+                         exit = ExpressiveAnimations.fadeExit()
                      ) {
                         LyricsResultItem(
                             item = item,

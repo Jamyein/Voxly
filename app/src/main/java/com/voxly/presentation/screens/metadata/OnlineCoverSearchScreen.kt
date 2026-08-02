@@ -154,8 +154,8 @@ fun OnlineCoverSearchScreen(
         ) {
                     AnimatedVisibility(
                         visible = isLoading && coverResults.isEmpty(),
-                        enter = ExpressiveAnimations.FadeEnter,
-                        exit = ExpressiveAnimations.FadeExit
+                        enter = ExpressiveAnimations.fadeEnter(),
+                        exit = ExpressiveAnimations.fadeExit()
                 ) {
                 Box(
                     modifier = Modifier
@@ -169,8 +169,8 @@ fun OnlineCoverSearchScreen(
 
          AnimatedVisibility(
              visible = coverResults.isNotEmpty(),
-             enter = ExpressiveAnimations.ListItemEnter,
-             exit = ExpressiveAnimations.FadeExit
+             enter = ExpressiveAnimations.listItemEnter(),
+             exit = ExpressiveAnimations.fadeExit()
          ) {
              SearchProgressIndicatorForCover(
                  searchState = searchProgress,
@@ -180,8 +180,8 @@ fun OnlineCoverSearchScreen(
 
                       AnimatedVisibility(
                           visible = coverResults.isNotEmpty(),
-                          enter = ExpressiveAnimations.ListItemEnter,
-                          exit = ExpressiveAnimations.FadeExit
+                          enter = ExpressiveAnimations.listItemEnter(),
+                          exit = ExpressiveAnimations.fadeExit()
                  ) {
              LazyColumn(
                     modifier = Modifier.fillMaxSize(),

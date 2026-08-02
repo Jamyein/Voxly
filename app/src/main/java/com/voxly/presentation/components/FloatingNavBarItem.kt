@@ -1,8 +1,6 @@
 package com.voxly.presentation.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -102,13 +100,10 @@ fun RowScope.FloatingNavBarItem(
         ).size.width.toDp() + (24 + 8).dp + (16 * 2).dp
     }
 
-    // Bouncy width spring: the underdamped overshoot is the pill "回弹". Follows ReadYou's
-    // FloatingFilterBarRow (damping 0.7 for label mode); 0.6 keeps the pop visible without
-    // the capsule visibly wobbling.
-    val itemWidthSpring = spring<Dp>(
-        dampingRatio = 0.6f,
-        stiffness = Spring.StiffnessMediumLow,
-    )
+    // Bouncy width spring: the underdamped overshoot is the pill "回弹". damping 0.6 is the
+    // M3 Expressive fast-spatial token (0.6, 800); 800 stiffness keeps the same pop but
+    // settles faster than the old hand-rolled 300.
+    val itemWidthSpring = MaterialTheme.motionScheme.fastSpatialSpec<Dp>()
 
     val targetWidth = if (selected) selectedWidth else InactiveWidth
     // First composition starts from the OPPOSITE width so the initial page loads animate

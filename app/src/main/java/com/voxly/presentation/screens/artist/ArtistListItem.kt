@@ -42,10 +42,11 @@ import com.voxly.presentation.components.rememberRoleAccent
 import com.voxly.presentation.components.roleAccentGradient
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.createArtistNameSharedElementKey
-import androidx.compose.animation.core.spring
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.rememberSharedElementBoundsTransform
+import com.voxly.presentation.theme.rememberSharedElementTextBoundsTransform
 import com.voxly.presentation.theme.scaleOnPress
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
@@ -110,7 +111,7 @@ internal fun ArtistListItem(
                         Modifier.sharedElement(
                             rememberSharedContentState(key = artistNameKey),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> spring() }
+                            boundsTransform = rememberSharedElementTextBoundsTransform()
                         )
                     }
                 } else Modifier
@@ -217,7 +218,7 @@ internal fun ArtistGridItem(
                         Modifier.sharedElement(
                             rememberSharedContentState(key = artistNameKey),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> spring() }
+                            boundsTransform = rememberSharedElementTextBoundsTransform()
                         )
                     }
                 } else Modifier

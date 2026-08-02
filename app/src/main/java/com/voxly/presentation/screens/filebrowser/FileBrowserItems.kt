@@ -3,7 +3,6 @@ package com.voxly.presentation.screens.filebrowser
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -54,6 +53,9 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.screens.album.getAlbumDisplayYearString
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.rememberSharedElementBoundsTransform
+import com.voxly.presentation.theme.rememberSharedElementTextBoundsTransform
+import com.voxly.presentation.theme.rememberSharedElementTitleBoundsTransform
 import com.voxly.presentation.theme.scaleOnPress
 import timber.log.Timber
 
@@ -187,7 +189,7 @@ internal fun AlbumGridItem(
                         .sharedElement(
                             rememberSharedContentState(key = albumCoverKey),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> spring() }
+                            boundsTransform = rememberSharedElementBoundsTransform()
                         )
                         .clickable(interactionSource = interactionSource, onClick = onClick)
                         .clip(MaterialTheme.shapes.medium)
@@ -244,7 +246,7 @@ internal fun AlbumGridItem(
                         Modifier.sharedElement(
                             rememberSharedContentState(key = albumTitleKey),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> spring() }
+                            boundsTransform = rememberSharedElementTitleBoundsTransform()
                         )
                     }
                 } else Modifier
@@ -260,7 +262,7 @@ internal fun AlbumGridItem(
                         Modifier.sharedElement(
                             rememberSharedContentState(key = albumArtistKey),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> spring() }
+                            boundsTransform = rememberSharedElementTextBoundsTransform()
                         )
                     }
                 } else Modifier

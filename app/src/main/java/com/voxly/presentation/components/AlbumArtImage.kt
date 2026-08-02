@@ -1,12 +1,6 @@
 package com.voxly.presentation.components
 
 import android.net.Uri
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -23,8 +17,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -200,37 +192,9 @@ fun ShimmerAlbumArtPlaceholder(
         return
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerX by infiniteTransition.animateFloat(
-        initialValue = -200f,
-        targetValue = 400f,
-        animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 1200
-                -200f at 0 using LinearEasing
-                400f at 1200 using LinearEasing
-            },
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerX"
-    )
-    val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
-    val highlightColor = MaterialTheme.colorScheme.surfaceContainerHighest
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clip(shape)
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        surfaceColor,
-                        highlightColor,
-                        surfaceColor
-                    ),
-                    start = Offset(shimmerX, 0f),
-                    end = Offset(shimmerX + 200f, 0f)
-                )
-            )
+    // Delegate to the shared shimmer primitive so the keyframes/colors live in one place.
+    ShimmerBox(
+        modifier = modifier.fillMaxSize(),
+        shape = shape
     )
 }

@@ -3,7 +3,6 @@ package com.voxly.presentation.screens
 import android.app.Activity
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -180,18 +179,12 @@ private fun <T> ConnectedIconButtonGroup(
                                 if (option.text != null) {
                                     Text(
                                         text = option.text,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        modifier = Modifier.animateContentSize(
-                                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                        )
+                                        style = MaterialTheme.typography.labelLarge
                                     )
                                 } else if (option.icon != null) {
                                     Icon(
                                         imageVector = option.icon,
-                                        contentDescription = option.tooltip,
-                                        modifier = Modifier.animateContentSize(
-                                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                                        )
+                                        contentDescription = option.tooltip
                                     )
                                 }
                             }
@@ -248,10 +241,7 @@ fun DraggableSourcePriorityDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 450.dp)
-                    .verticalScroll(rememberScrollState())
-                    .animateContentSize(
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                    ),
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
@@ -1189,7 +1179,7 @@ private fun ScanningSettingsSection(
             trailingContent = {
                 val arrowRotation by animateFloatAsState(
                     targetValue = if (loudnessExpanded) 180f else 0f,
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                     label = "loudness_dropdown_arrow"
                 )
                 SortDropdownMenu(

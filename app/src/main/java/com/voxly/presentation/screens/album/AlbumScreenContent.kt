@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.album
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -64,8 +65,9 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createAlbumTitleSharedElementKey
 import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
-import androidx.compose.animation.core.spring
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
+import com.voxly.presentation.theme.ExpressiveAnimations
+import com.voxly.presentation.theme.rememberSharedElementBoundsTransform
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
 import com.voxly.presentation.viewmodel.ScrollPosition
@@ -113,7 +115,7 @@ private fun AlbumArtWithSharedElement(
                     .sharedElement(
                         rememberSharedContentState(key = sharedElementKey),
                         animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> spring() }
+                            boundsTransform = rememberSharedElementBoundsTransform()
                     )
                     .clip(shape)
             }
@@ -250,15 +252,21 @@ internal fun AlbumScreenContent(
         ) {
             LibraryRefreshBox(
                 isRefreshing = isRefreshing,
-                onRefresh = { viewModel.refresh() }
+                onRefresh = { viewModel.refresh() },
+                scrollBehavior = scrollBehavior
             ) {
                 if (albums.isEmpty() && !isRefreshing) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = stringResource(R.string.no_albums_found),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = ExpressiveAnimations.fadeEnter()
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = stringResource(R.string.no_albums_found),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 } else {
                     AlbumTabContent(
@@ -280,6 +288,7 @@ internal fun AlbumScreenContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun AlbumTabContent(
     albums: List<AlbumGroup>,
@@ -314,12 +323,17 @@ internal fun AlbumTabContent(
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         if (albums.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = stringResource(R.string.no_albums_found),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            AnimatedVisibility(
+                visible = true,
+                enter = ExpressiveAnimations.fadeEnter()
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.no_albums_found),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         } else {
             if (isYearSort) {
@@ -348,12 +362,20 @@ internal fun AlbumTabContent(
                     ) { index ->
                         val album = albums[index]
                         val onItemClick = remember(album) { { onAlbumClick(album) } }
-                        AlbumGridItem(
-                            album = album,
-                            onClick = onItemClick,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
+                        Box(
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = null,
+                                fadeOutSpec = null,
+                                placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                            )
+                        ) {
+                            AlbumGridItem(
+                                album = album,
+                                onClick = onItemClick,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
                     }
                 }
             }
@@ -445,12 +467,20 @@ internal fun AlbumYearGroupedContent(
                 ) { albumIndex ->
                     val album = yearGroup.albums[albumIndex]
                     val onItemClick = remember(album) { { onAlbumClick(album) } }
-                    AlbumGridItem(
-                        album = album,
-                        onClick = onItemClick,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
+                    Box(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = null,
+                            fadeOutSpec = null,
+                            placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                        )
+                    ) {
+                        AlbumGridItem(
+                            album = album,
+                            onClick = onItemClick,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
                 }
             }
         }

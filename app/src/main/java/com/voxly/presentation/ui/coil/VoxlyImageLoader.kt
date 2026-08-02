@@ -7,6 +7,8 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.memoryCacheMaxSizePercentWhileInBackground
 import coil3.request.crossfade
+import coil3.request.maxBitmapSize
+import coil3.size.Size
 import coil3.util.DebugLogger
 import com.voxly.BuildConfig
 import okio.Path.Companion.toPath
@@ -17,6 +19,9 @@ class VoxlyImageLoader private constructor(
 
     private val _imageLoader: ImageLoader by lazy {
         ImageLoader.Builder(appContext)
+            // Safety ceiling, not a per-scenario limit: Coil still auto-sizes to layout,
+            // this only stops pathological originals (e.g. editor's Size.ORIGINAL) from OOM.
+            .maxBitmapSize(Size(3000, 3000))
             .memoryCache {
                 MemoryCache.Builder()
                     .maxSizePercent(appContext, 0.25)
