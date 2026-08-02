@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.metadata
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -9,6 +10,9 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
@@ -17,18 +21,48 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.theme.MaterialShapes
 
 /**
  * Section title component.
+ * Cookie9Sided 角色色徽章 + titleMedium 大字，长表单有节奏。
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SectionTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.secondary,
-        modifier = Modifier.padding(vertical = 8.dp)
-    )
+fun SectionTitle(title: String, icon: AppIcon, modifier: Modifier = Modifier) {
+    val colorScheme = MaterialTheme.colorScheme
+    val accents = listOf(colorScheme.primary, colorScheme.secondary, colorScheme.tertiary)
+    val onAccents = listOf(colorScheme.onPrimary, colorScheme.onSecondary, colorScheme.onTertiary)
+    val roleIndex = title.hashCode().mod(3)
+    val accent = accents[roleIndex]
+    val onAccent = onAccents[roleIndex]
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(MaterialShapes.Cookie9Sided.toShape())
+                .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.72f)))),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = appIconPainter(icon),
+                contentDescription = null,
+                tint = onAccent,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+        )
+    }
 }
 
 /**

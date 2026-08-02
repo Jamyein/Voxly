@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.metadata
 
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -47,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
@@ -252,34 +255,48 @@ private fun OnlineReleaseList(
                             modifier = Modifier.size(140.dp)
                         )
                         Spacer(modifier = Modifier.size(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(140.dp),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            val songTitle = release.songTitle?.ifBlank { release.title.ifBlank { "-" } }
+                                ?: release.title.ifBlank { "-" }
+                            val albumTitle = release.albumTitle?.ifBlank { release.title.ifBlank { "-" } }
+                                ?: release.title.ifBlank { "-" }
                             Text(
-                                text = "Song: ${release.songTitle?.ifBlank { release.title.ifBlank { "-" } } ?: release.title.ifBlank { "-" } }",
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
+                                text = songTitle,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Artist: ${release.artist.ifBlank { "-" }}",
+                                text = buildString {
+                                    release.artist.ifBlank { null }?.let { append(it) }
+                                    if (albumTitle != "-" && albumTitle != songTitle) {
+                                        if (isNotEmpty()) append(" · ")
+                                        append(albumTitle)
+                                    }
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Text(
-                                text = "Album: ${release.albumTitle?.ifBlank { "-" } ?: release.title.ifBlank { "-" }}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "Source: ${displaySource(release)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                shape = MaterialTheme.shapes.extraLarge,
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            ) {
+                                Text(
+                                    text = displaySource(release),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                     }
                 }

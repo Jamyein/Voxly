@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,25 +27,24 @@ import androidx.compose.ui.unit.dp
 /**
  * Floating Pill / Capsule bottom navigation bar (M3E style).
  *
- * Implements the M3E expressive "悬浮药丸状 (Floating Pill / Capsule)" pattern documented
- * at `docs/实现"悬浮药丸状（Floating Pill  Capsule）"的底部导航栏.md`, kept compact per
- * design iteration:
+ * A floating capsule (`surfaceContainerHigh`, `CircleShape`, 8 dp shadow) that hugs its
+ * content width (the active pill widens to fit `[icon][label]`, unused indicators are
+ * icon-only) and floats above the gesture-nav inset (`WindowInsets.safeDrawing` + 16 dp
+ * lift).
  *
- *   - **Width = 65 % of screen** (down from 85 %) so the pill reads as a small floating
- *     object rather than a near-full-width bar;
- *   - **Height ≈ 56 dp** (down from ~80 dp) via a tight 48 dp item touch target + 4 dp
- *     vertical padding. Small enough to feel like a capsule, large enough for a11y;
- *   - **2 dp inter-item gap** — destinations sit visibly snug together;
- *   - 8 dp shadow, 4 dp tonal elevation, `surfaceContainerHigh` fill, `CircleShape` clip.
+ * Smoothness (pattern from ReadYou's FloatingFilterBarRow): the row is `wrapContentWidth`
+ * and each item animates its own **width** via `animateDpAsState` — on a switch one item
+ * expands while the other shrinks symmetrically, so the total row width stays ~constant
+ * and there is NO weight-redistribution layout cascade. The width spring carries the
+ * bounce.
  *
- * We render this as `Surface` + `Row` (not `NavigationBar`) because:
- *   1. `NavigationBar`'s `Arrangement.spacedBy` is hard-coded and too loose;
- *   2. `NavigationBarItem` paints an icon-state-layer ripple that animates on every tap —
- *      that gray flash on switch is exactly what we want to avoid. Callers should use
- *      [FloatingNavBarItem] (the matching companion in this package) instead, which has
- *      no built-in ripple.
+ * M3E styling applied:
+ *   - Horizontal nav items: each [FloatingNavBarItem] is a pill with the label to the
+ *     RIGHT of the icon, shown only on the active indicator;
+ *   - Active pill `secondaryContainer`, unused indicators transparent;
+ *   - Active content `onSecondaryContainer`, resting `onSurfaceVariant`.
  *
- * Modifier chain (per the design doc — insets first, then the lift):
+ * Modifier chain (insets first, then the lift):
  *
  * ```
  * .windowInsetsPadding(WindowInsets.safeDrawing)  // status + gesture nav
@@ -66,10 +66,10 @@ fun FloatingToolbarNavigationBar(
             .padding(bottom = 16.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Capsule container: 65 % screen width, drop shadow, fully-rounded clip.
+        // Capsule container: wraps the items' content width, drop shadow, fully-rounded.
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.65f)
+                .wrapContentWidth()
                 // Cast a soft drop shadow so the pill reads as a physical object above
                 // the content. Shadow shape must match the clip shape to render correctly.
                 .shadow(elevation = 8.dp, shape = CircleShape)
@@ -82,7 +82,7 @@ fun FloatingToolbarNavigationBar(
             // Custom Row with tight arrangement + selectableGroup for accessibility.
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .wrapContentWidth()
                     // selectableGroup() lets screen readers know the items are mutually
                     // exclusive choices (the standard NavigationBar behaviour).
                     .selectableGroup()

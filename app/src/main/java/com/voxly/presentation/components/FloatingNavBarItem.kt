@@ -1,54 +1,73 @@
 package com.voxly.presentation.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+/** Pill height — a compact icon-only chip. */
+private val ItemHeight = 56.dp
+private val InactiveWidth = 56.dp
 
 /**
  * Companion item for [FloatingToolbarNavigationBar].
  *
- * We **do not** use `NavigationBarItem` here because it paints an internal icon state
- * layer (ripple + gray fade) on every selection — visible as a jarring gray flash when
- * the user switches pages. This composable paints the whole selected region as a single
- * capsule highlight instead, with a smooth (but very short) color cross-fade and **no
- * ripple**.
+ * Horizontal nav item (M3E horizontal variant): the label sits **to the RIGHT of the icon**
+ * and is shown **only on the active pill** — unused indicators are transparent icon-only
+ * chips. The item animates its own **width** (`Modifier.widthIn(min = animatedWidth)`,
+ * `animateDpAsState`): the selected pill widens to fit `[icon][label]` while the neighbors
+ * stay compact, so the expanding pill **squeezes** into the bar. Because the bar is
+ * `wrapContentWidth`, a switch expands one item and shrinks the other symmetrically — the
+ * total width stays ~constant, so there is no weight-redistribution layout cascade (this
+ * is what keeps the animation smooth).
  *
- * Layout: a centered `Column` of `Icon` (22 dp) + `Text` (labelSmall), wrapped in a
- * `Box` that fills 1/3 of the parent `Row` (via `Modifier.weight(1f)`) so the three
- * destinations sit snug and equally-spaced inside the floating capsule.
+ * The width spring is underdamped (0.6), so the pill **overshoots past its resting width
+ * ("回弹")** before settling. The label is gated on the pill having expanded enough to hold
+ * it, so it never snaps in mid-animation.
  *
- * Selection visual: the whole `Box` background animates between `Color.Transparent` and
- * `secondaryContainer`, then clipped to `CircleShape` so the highlight reads as a pill
- * within the floating capsule.
+ * M3E styling applied:
+ *   - Active pill `secondaryContainer`, rounded-capsule (`RoundedCornerShape(h/2)`);
+ *     unused indicators transparent — the icon floats on the capsule container;
+ *   - Icon 24 dp, filled when active / outlined when resting, active `onSecondaryContainer`
+ *     (on the pill), resting `onSurfaceVariant`;
+ *   - Active label bold (700) `onSecondaryContainer`, shown only while selected.
  *
- * Accessibility: the click target is a `Role.Tab` (semantic role for mutually-exclusive
- * navigation choices), selectable via TalkBack.
+ * Accessibility: the click target is a `Role.Tab` (mutually-exclusive navigation choices),
+ * selectable via TalkBack; the icon's content description is the label.
  *
  * @param selected whether this destination is the current page.
  * @param onClick invoked when the user taps this item.
@@ -68,52 +87,85 @@ fun RowScope.FloatingNavBarItem(
     label: String,
     modifier: Modifier = Modifier
 ) {
-    // Smooth but short color cross-fade for the highlight pill. Kept subtle (120 ms)
-    // so it reads as a single selection gesture rather than a flashy animation.
-    val containerColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer
-                      else Color.Transparent,
-        animationSpec = tween(durationMillis = 120),
-        label = "floatingNavContainer"
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelMedium
+
+    // Selected pill width = this item's label + icon + gap + padding, measured once so the
+    // animation never re-measures. (The three labels are close in width, so switches stay
+    // near-symmetric and the bar's total width barely changes.)
+    val selectedWidth = with(density) {
+        textMeasurer.measure(
+            text = AnnotatedString(label),
+            style = labelStyle,
+            maxLines = 1,
+        ).size.width.toDp() + (24 + 8).dp + (16 * 2).dp
+    }
+
+    // Bouncy width spring: the underdamped overshoot is the pill "回弹". Follows ReadYou's
+    // FloatingFilterBarRow (damping 0.7 for label mode); 0.6 keeps the pop visible without
+    // the capsule visibly wobbling.
+    val itemWidthSpring = spring<Dp>(
+        dampingRatio = 0.6f,
+        stiffness = Spring.StiffnessMediumLow,
     )
-    val contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+
+    val targetWidth = if (selected) selectedWidth else InactiveWidth
+    // First composition starts from the OPPOSITE width so the initial page loads animate
+    // too; afterwards animateDpAsState just tracks target changes directly.
+    var initial by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { initial = false }
+    val oppositeWidth = if (selected) InactiveWidth else selectedWidth
+    val animatedWidth by animateDpAsState(
+        targetValue = if (initial) oppositeWidth else targetWidth,
+        animationSpec = itemWidthSpring,
+        label = "floatingNavItemWidth",
+    )
+    // Show the label only once the pill has expanded enough to hold it — prevents the
+    // content snapping in mid-animation.
+    val showLabel = selected && animatedWidth >= selectedWidth - 2.dp
 
     Box(
         modifier = modifier
-            // Equal-share the parent Row's width — keeps the three destinations compact
-            // and visually balanced inside the capsule.
-            .weight(1f)
-            .clip(CircleShape)
-            .background(containerColor)
-            // No ripple / state-layer indication — `indication = null` suppresses the
-            // default ripple that NavigationBarItem would have produced on the icon.
+            .height(ItemHeight)
+            .widthIn(min = animatedWidth)
+            .background(
+                color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                        else Color.Transparent,
+                shape = RoundedCornerShape(ItemHeight / 2),
+            )
+            // No ripple / state-layer indication — `indication = null` keeps the surface
+            // clean; the width squeeze + pop is the selection feedback.
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 role = Role.Tab,
                 onClick = onClick
             )
-            .padding(vertical = 6.dp, horizontal = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
                 imageVector = if (selected) selectedIcon else icon,
                 contentDescription = label,
-                tint = contentColor,
-                modifier = Modifier.size(22.dp)
+                tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
             )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (showLabel) {
+                Text(
+                    text = label,
+                    // M3E type hierarchy: active label bold (700).
+                    style = labelStyle.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

@@ -48,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
@@ -278,7 +279,7 @@ private fun LyricsResultItem(
             ) {
                 Text(
                     text = item.trackName,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
@@ -291,7 +292,7 @@ private fun LyricsResultItem(
                 // LRC 标签使用 tertiary 颜色
                 if (item.hasSyncedLyrics && !isLoading) {
                     Surface(
-                        shape = MaterialTheme.shapes.small,
+                        shape = MaterialTheme.shapes.extraLarge,
                         color = MaterialTheme.colorScheme.tertiaryContainer
                     ) {
                         Text(
@@ -310,7 +311,7 @@ private fun LyricsResultItem(
             )
             // Source tag - unified tertiary color scheme for metadata labels
             Surface(
-                shape = MaterialTheme.shapes.small,
+                shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.tertiaryContainer
             ) {
                 Text(

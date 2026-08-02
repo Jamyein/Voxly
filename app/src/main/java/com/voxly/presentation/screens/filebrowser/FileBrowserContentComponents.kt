@@ -5,18 +5,31 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.toShape
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,6 +39,7 @@ import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.theme.MaterialShapes
 import com.voxly.presentation.viewmodel.SelectedDirectory
 
 /**
@@ -119,31 +133,49 @@ fun DirectoryOverviewContent(
             }
             else -> {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Text(
-                        text = stringResource(R.string.selected_directories_count, directories.size),
-                        style = MaterialTheme.typography.labelLarge,
+                    Surface(
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = appIconPainter(AppIcon.FolderOpen),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.selected_directories_count, directories.size),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    }
 
                     LazyVerticalGrid(
                         state = gridState,
-                        columns = GridCells.Adaptive(minSize = 300.dp),
+                        columns = GridCells.Adaptive(minSize = 280.dp),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = 12.dp,
                             end = 12.dp,
-                            top = 8.dp,
+                            top = 4.dp,
                             bottom = 8.dp + bottomPadding
                         ),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(directories, key = { it.uri }) { directory ->
+                        itemsIndexed(directories, key = { _, it -> it.uri }) { index, directory ->
                             val dirName = directory.path.substringAfterLast("/").substringAfterLast(":")
                             val files = directoryFiles[directory.uri].orEmpty()
                             DirectoryItem(
                                 directory = directory,
                                 fileCount = files.size,
+                                index = index,
                                 onClick = { onOpenDirectory(directory.uri, dirName) }
                             )
                         }
@@ -237,56 +269,104 @@ fun ErrorContent(message: String) {
 }
 
 /**
- * Directory item card.
+ * Directory item hero card.
+ *
+ * 每个文件夹一张 Hero 瓦片：Cookie9Sided 渐变徽章 + 大号目录名 + 计数 pill，
+ * 底色按索引轮换主/次/第三色，让网格有呼吸感。按压 0.97 缩放 + 弹簧回弹。
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DirectoryItem(
     directory: SelectedDirectory,
     fileCount: Int,
+    index: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
         ),
+        label = "directoryItemScale"
+    )
+
+    val colorScheme = MaterialTheme.colorScheme
+    val roleIndex = index % 3
+    val accents = listOf(colorScheme.primary, colorScheme.secondary, colorScheme.tertiary)
+    val onAccents = listOf(colorScheme.onPrimary, colorScheme.onSecondary, colorScheme.onTertiary)
+    val containers = listOf(
+        colorScheme.primaryContainer,
+        colorScheme.secondaryContainer,
+        colorScheme.tertiaryContainer
+    )
+    val onContainers = listOf(
+        colorScheme.onPrimaryContainer,
+        colorScheme.onSecondaryContainer,
+        colorScheme.onTertiaryContainer
+    )
+    val accent = accents[roleIndex]
+    val onAccent = onAccents[roleIndex]
+    val container = containers[roleIndex]
+    val onContainer = onContainers[roleIndex]
+
+    Card(
+        modifier = modifier.scale(scale),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = container),
+        interactionSource = interactionSource,
         onClick = onClick
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(20.dp)
         ) {
-            Icon(
-                painter = appIconPainter(AppIcon.Folder),
-                contentDescription = stringResource(R.string.cd_directory),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = directory.path.substringAfterLast('/').ifBlank { directory.path },
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = directory.path,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(MaterialShapes.Cookie9Sided.toShape())
+                    .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.72f)))),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = appIconPainter(AppIcon.FolderOpen),
+                    contentDescription = stringResource(R.string.cd_directory),
+                    tint = onAccent,
+                    modifier = Modifier.size(30.dp)
                 )
             }
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "$fileCount",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(start = 8.dp)
+                text = directory.path.substringAfterLast('/').ifBlank { directory.path },
+                style = MaterialTheme.typography.titleLarge,
+                color = onContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = directory.path,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = onContainer.copy(alpha = 0.10f),
+                contentColor = onContainer
+            ) {
+                Text(
+                    text = stringResource(R.string.file_count, fileCount),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
         }
     }
 }

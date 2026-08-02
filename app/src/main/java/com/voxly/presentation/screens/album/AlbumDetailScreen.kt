@@ -31,6 +31,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -69,8 +71,10 @@ import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.openMetadataFor
 import androidx.compose.animation.core.spring
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
+import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
+import com.voxly.presentation.screens.metadata.SectionTitle
 
 /**
  * Album detail screen showing album info and track list.
@@ -172,7 +176,7 @@ fun AlbumDetailScreen(
                     start = 12.dp,
                     end = 12.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Album Hero Section: Cover + Info
                 item {
@@ -304,12 +308,18 @@ fun AlbumDetailScreen(
                                 }
                             }
                         }
-                        Text(
-                            text = metadataLine,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            textAlign = TextAlign.Center
-                        )
+                        Surface(
+                            shape = MaterialTheme.shapes.extraLarge,
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ) {
+                            Text(
+                                text = metadataLine,
+                                style = MaterialTheme.typography.labelMedium,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -325,7 +335,7 @@ fun AlbumDetailScreen(
                             if (displayBitrate > 0) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = MaterialTheme.shapes.small
+                                    shape = MaterialTheme.shapes.extraLarge
                                 ) {
                                     Text(
                                         text = formatBitrate(displayBitrate),
@@ -338,7 +348,7 @@ fun AlbumDetailScreen(
                             if (displaySampleRate > 0) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                                    shape = MaterialTheme.shapes.small
+                                    shape = MaterialTheme.shapes.extraLarge
                                 ) {
                                     Text(
                                         text = formatSampleRate(displaySampleRate),
@@ -349,6 +359,8 @@ fun AlbumDetailScreen(
                                 }
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
 
@@ -360,25 +372,13 @@ fun AlbumDetailScreen(
                 sortedDiscNumbers.forEach { discNumber ->
                     val discFiles = groupedFiles[discNumber] ?: return@forEach
 
-                    // Disc title with divider
+                    // Disc title（Cookie 徽章 + 大字，同元数据编辑页节标题）
                     item(key = "disc_header_$discNumber") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp, top = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = "Disc $discNumber",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            androidx.compose.material3.HorizontalDivider(
-                                modifier = Modifier.weight(1f),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                        }
+                        SectionTitle(
+                            title = "Disc $discNumber",
+                            icon = AppIcon.PlaylistAdd,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
                     }
 
                     // Songs as individual lazy items with stable keys
@@ -386,11 +386,26 @@ fun AlbumDetailScreen(
                         items = discFiles,
                         key = { _, audioFile -> "song_${audioFile.path}" }
                     ) { index, audioFile ->
+                        // 首尾卡片加大圆角：顶端卡上角 / 末端卡下角 28dp，中间卡小圆角相连
+                        val segmentShape = when {
+                            discFiles.size == 1 -> MaterialTheme.shapes.extraLarge
+                            index == 0 -> RoundedCornerShape(
+                                topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp
+                            )
+                            index == discFiles.size - 1 -> RoundedCornerShape(
+                                topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 28.dp
+                            )
+                            else -> RoundedCornerShape(8.dp)
+                        }
                         SegmentedListItem(
                             onClick = { openMetadataFor(onNavigateToMetadata, audioFile) },
-                            shapes = ListItemDefaults.segmentedShapes(
-                                index = index,
-                                count = discFiles.size
+                            shapes = ListItemShapes(
+                                shape = segmentShape,
+                                selectedShape = segmentShape,
+                                pressedShape = segmentShape,
+                                focusedShape = segmentShape,
+                                hoveredShape = segmentShape,
+                                draggedShape = segmentShape
                             ),
                             colors = ListItemDefaults.segmentedColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLowest

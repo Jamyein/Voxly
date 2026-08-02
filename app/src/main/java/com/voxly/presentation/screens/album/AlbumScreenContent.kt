@@ -339,8 +339,8 @@ internal fun AlbumTabContent(
                     columns = GridCells.Adaptive(160.dp),
                    modifier = Modifier.fillMaxSize(),
                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                   horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-                   verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                   horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                   verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
                ) {
                     items(
                         count = albums.size,
@@ -423,8 +423,8 @@ internal fun AlbumYearGroupedContent(
             columns = GridCells.Adaptive(160.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             yearGroups.forEach { yearGroup ->
                 item(

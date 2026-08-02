@@ -948,6 +948,7 @@ private fun MetadataFormContent(
             onRotateAlbumArt = onRotateAlbumArt,
             onRemoveAlbumArt = onRemoveAlbumArt,
             filePath = audioFile.path,
+            formatLabel = audioFile.format.displayName,
             sharedTransitionScope = sharedTransitionScope,
             animatedContentScope = animatedVisibilityScope
         )

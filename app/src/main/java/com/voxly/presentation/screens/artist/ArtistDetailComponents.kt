@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +43,7 @@ import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 
 import timber.log.Timber
 import com.voxly.presentation.theme.ExpressiveTypography
+import com.voxly.presentation.theme.MaterialShapes
 
 /**
  * Hero 区域：杂志大字报风格
@@ -49,7 +52,7 @@ import com.voxly.presentation.theme.ExpressiveTypography
  * - 小头像（64dp）+ 横向统计标签
  * - 大量留白，排版驱动
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun HeroSection(
     artistName: String,
@@ -63,6 +66,7 @@ fun HeroSection(
 ) {
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
     val artistNameKey = createArtistNameSharedElementKey(artistName)
+    val avatarShape = MaterialShapes.Sunny.toShape()
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -104,15 +108,15 @@ fun HeroSection(
                                 rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
                                 animatedVisibilityScope = animatedVisibilityScope
                             )
-                            .shadow(4.dp, shape = CircleShape)
-                            .clip(CircleShape)
+                            .shadow(4.dp, shape = avatarShape)
+                            .clip(avatarShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     }
                 } else {
                     Modifier
                         .size(64.dp)
-                        .shadow(4.dp, shape = CircleShape)
-                        .clip(CircleShape)
+                        .shadow(4.dp, shape = avatarShape)
+                        .clip(avatarShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 }
             ) {
@@ -123,7 +127,7 @@ fun HeroSection(
                         contentDescription = artistName,
                         size = 64.dp,
                         modifier = Modifier.fillMaxSize(),
-                        clipShape = CircleShape
+                        clipShape = avatarShape
                     )
                 }
             }
@@ -192,7 +196,7 @@ fun SectionHeader(
  *
  * 使用 M3E ListItem，高度 64dp
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SongListItem(
     audioFile: AudioFile,
@@ -203,6 +207,7 @@ fun SongListItem(
 ) {
     val coverKey = createAlbumArtSharedElementKey(audioFile.path)
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+    val coverShape = MaterialShapes.Cookie9Sided.toShape()
 
     ListItem(
         modifier = modifier.clickable(onClick = onClick),
@@ -219,12 +224,12 @@ fun SongListItem(
                                 rememberSharedContentState(key = coverKey),
                                 animatedVisibilityScope = animatedVisibilityScope
                             )
-                            .clip(MaterialTheme.shapes.medium)
+                            .clip(coverShape)
                     }
                 } else {
                     Modifier
                         .size(48.dp)
-                        .clip(MaterialTheme.shapes.medium)
+                        .clip(coverShape)
                 }
             ) {
                 AlbumArtImage(
@@ -233,7 +238,7 @@ fun SongListItem(
                     contentDescription = audioFile.metadata.title,
                     size = 48.dp,
                     modifier = Modifier.fillMaxSize(),
-                    clipShape = MaterialTheme.shapes.medium
+                    clipShape = coverShape
                 )
             }
         },
@@ -255,11 +260,17 @@ fun SongListItem(
             )
         },
         trailingContent = {
-            Text(
-                text = audioFile.getFormattedDuration(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+            ) {
+                Text(
+                    text = audioFile.getFormattedDuration(),
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
         }
     )
 }

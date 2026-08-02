@@ -284,7 +284,8 @@ fun MP3TagNavHost() {
                             // M3E Floating Pill — use the custom FloatingNavBarItem (not
                             // NavigationBarItem) so we suppress the icon ripple / gray
                             // state-layer that M3 paints on selection. Each item paints its
-                            // WHOLE region as a capsule highlight when selected.
+                            // own content-sized capsule that expands from the center on
+                            // selection.
                             FloatingToolbarNavigationBar {
                                 FloatingNavBarItem(
                                     selected = isFileSelected,

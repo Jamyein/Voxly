@@ -85,8 +85,8 @@ internal fun AllAudiosTabContent(
                     columns = GridCells.Adaptive(minSize = 300.dp),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(audios, key = { it.path }) { audioFile ->
                         val isSelected = audioFile.path in selectedFiles

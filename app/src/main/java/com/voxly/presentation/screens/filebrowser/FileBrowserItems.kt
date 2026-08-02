@@ -3,8 +3,13 @@ package com.voxly.presentation.screens.filebrowser
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,13 +28,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -161,6 +171,26 @@ internal fun AlbumGridItem(
         }
     }
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+
+    // 无封面时用角色渐变 + 首字母占位；name hash 保证同一专辑颜色稳定（无需调用点传 index）
+    val colorScheme = MaterialTheme.colorScheme
+    val accents = listOf(colorScheme.primary, colorScheme.secondary, colorScheme.tertiary)
+    val onAccents = listOf(colorScheme.onPrimary, colorScheme.onSecondary, colorScheme.onTertiary)
+    val roleIndex = album.name.hashCode().mod(3)
+    val accent = accents[roleIndex]
+    val onAccent = onAccents[roleIndex]
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "albumGridItemScale"
+    )
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -177,6 +207,7 @@ internal fun AlbumGridItem(
                         )
                         .clickable(onClick = onClick)
                         .clip(MaterialTheme.shapes.medium)
+                        .scale(scale)
                 }
             } else {
                 Modifier
@@ -184,6 +215,7 @@ internal fun AlbumGridItem(
                     .aspectRatio(1f)
                     .clickable(onClick = onClick)
                     .clip(MaterialTheme.shapes.medium)
+                    .scale(scale)
             },
             contentAlignment = Alignment.Center
         ) {
@@ -197,7 +229,19 @@ internal fun AlbumGridItem(
                     clipShape = MaterialTheme.shapes.medium
                 )
             } else {
-                DefaultAlbumArtPlaceholder(size = 200.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.72f)))),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = album.name.trim().firstOrNull()?.uppercase() ?: "?",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = onAccent
+                    )
+                }
             }
         }
         Column(
@@ -207,8 +251,8 @@ internal fun AlbumGridItem(
         ) {
             Text(
                 text = album.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = if (canUseSharedTransition) {
@@ -237,14 +281,20 @@ internal fun AlbumGridItem(
                     }
                 } else Modifier
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = infoRestText,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+            ) {
+                Text(
+                    text = infoRestText,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
         }
     }
 }

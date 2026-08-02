@@ -60,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
@@ -253,7 +254,7 @@ private fun CoverResultItem(
             ) {
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
@@ -263,7 +264,7 @@ private fun CoverResultItem(
                 )
                 // Source tag - unified with tertiary color scheme
                 Surface(
-                    shape = MaterialTheme.shapes.small,
+                    shape = MaterialTheme.shapes.extraLarge,
                     color = MaterialTheme.colorScheme.tertiaryContainer
                 ) {
                     Text(

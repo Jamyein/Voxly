@@ -10,6 +10,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.viewmodel.MetadataField
 
 /**
@@ -48,7 +49,7 @@ fun MetadataFieldsSection(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        SectionTitle(stringResource(R.string.basic_information))
+        SectionTitle(stringResource(R.string.basic_information), AppIcon.Album)
 
         BasicMetadataFields(
             metadata = metadata,
@@ -61,7 +62,7 @@ fun MetadataFieldsSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        SectionTitle(stringResource(R.string.track_information))
+        SectionTitle(stringResource(R.string.track_information), AppIcon.PlaylistAdd)
 
         TrackInfoFields(
             metadata = metadata,
@@ -71,7 +72,7 @@ fun MetadataFieldsSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        SectionTitle(stringResource(R.string.additional_information))
+        SectionTitle(stringResource(R.string.additional_information), AppIcon.AutoFix)
 
         AdvancedMetadataFields(
             metadata = metadata,
@@ -85,7 +86,7 @@ fun MetadataFieldsSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        SectionTitle(stringResource(R.string.lyrics_section_title))
+        SectionTitle(stringResource(R.string.lyrics_section_title), AppIcon.AudioFile)
 
         LyricsField(
             metadata = metadata,
@@ -95,7 +96,7 @@ fun MetadataFieldsSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        SectionTitle(stringResource(R.string.file_information))
+        SectionTitle(stringResource(R.string.file_information), AppIcon.FolderOpen)
 
         FileInfoSection(audioFile = audioFile)
     }
