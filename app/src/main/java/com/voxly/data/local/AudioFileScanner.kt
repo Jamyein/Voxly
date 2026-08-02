@@ -8,6 +8,7 @@ import com.voxly.data.local.scanner.AlbumArtistAggregator
 import com.voxly.data.local.scanner.FilterEngine
 import com.voxly.data.local.scanner.MediaStoreDataSource
 import com.voxly.data.local.scanner.FastScanProcessor
+import com.voxly.data.local.scanner.ScanFilterProvider
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -16,7 +17,6 @@ import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.IncrementalList
-import com.voxly.domain.repository.WhitelistRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +35,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChangedBy
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -78,12 +77,11 @@ class AudioFileScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val libraryCache: MusicLibraryCache,
-    private val settingsDataStore: SettingsDataStore,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope,
     // New injected components for separation of concerns
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val filterEngine: FilterEngine,
-    private val whitelistRepository: WhitelistRepository,
+    private val scanFilterProvider: ScanFilterProvider,
     private val albumArtistAggregator: AlbumArtistAggregator,
     // Scan strategies
     private val globalScanStrategy: com.voxly.data.local.scanner.GlobalScanStrategy,
@@ -189,14 +187,15 @@ class AudioFileScanner @Inject constructor(
         incremental: Boolean = false,
         forceRefresh: Boolean = false
     ): List<AudioFile> = scanMutex.withLock {
+        val filterSettings = scanFilterProvider.current()
         val servedFromCache = hasCachedData() && !incremental && !forceRefresh
 
         val files = when {
-            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, forceRefresh)
+            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, forceRefresh, filterSettings)
             incremental && hasCachedData() -> {
                 // Progressive scan path: intermediate batches are written to
                 // cache as they arrive, so the UI sees results in stages.
-                incrementalScanStrategy.scan { batch ->
+                incrementalScanStrategy.scan(filterSettings) { batch ->
                     libraryCache.updateCache(batch)
                     libraryCache.bumpCacheVersion()
                 }
@@ -209,7 +208,7 @@ class AudioFileScanner @Inject constructor(
                         return@withLock libraryCache.getCachedAudioFilesOnce()
                     }
                 }
-                globalScanStrategy.scan()
+                globalScanStrategy.scan(filterSettings)
             }
         }
 
@@ -318,26 +317,9 @@ class AudioFileScanner @Inject constructor(
                     return@launch
                 }
 
-                val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
-                val whitelistPaths = if (whitelistEnabled) {
-                    whitelistRepository.getValidWhitelistPathsOnce()
-                } else emptyList()
-
-                val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
-                val blacklistPaths = if (blacklistEnabled) {
-                    settingsDataStore.blacklistDirectoryUris.first()
-                } else emptyList()
-
                 val filtered = filterEngine.applyFilters(
                     needsEnrichment,
-                    FilterEngine.FilterSettings(
-                        whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
-                        blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
-                        minDurationEnabled = false,
-                        whitelistPaths = whitelistPaths,
-                        blacklistPaths = blacklistPaths,
-                        minDurationMs = 0L
-                    )
+                    scanFilterProvider.current()
                 )
 
                 if (filtered.isEmpty()) {

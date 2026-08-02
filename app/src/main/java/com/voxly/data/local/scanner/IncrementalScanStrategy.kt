@@ -5,9 +5,7 @@ import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
-import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -18,8 +16,7 @@ class IncrementalScanStrategy @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val fileProcessor: FileProcessor,
-    private val filterEngine: FilterEngine,
-    private val whitelistRepository: WhitelistRepository
+    private val filterEngine: FilterEngine
 ) : ScanStrategy {
     companion object {
         private const val TAG = "IncrementalScanStrategy"
@@ -27,7 +24,8 @@ class IncrementalScanStrategy @Inject constructor(
         private val chineseCollator = SortUtil.chineseCollator
     }
 
-    override suspend fun scan(): List<AudioFile> = scan(onProgress = {})
+    override suspend fun scan(filterSettings: FilterEngine.FilterSettings): List<AudioFile> =
+        scan(filterSettings, onProgress = {})
 
     /**
      * Progressive overload: [onProgress] is called with intermediate batches
@@ -36,7 +34,10 @@ class IncrementalScanStrategy @Inject constructor(
      * from these callbacks, so the Room cache (and therefore the UI) receives
      * data in stages rather than all at once.
      */
-    suspend fun scan(onProgress: suspend (List<AudioFile>) -> Unit): List<AudioFile> = withContext(Dispatchers.IO) {
+    suspend fun scan(
+        filterSettings: FilterEngine.FilterSettings,
+        onProgress: suspend (List<AudioFile>) -> Unit
+    ): List<AudioFile> = withContext(Dispatchers.IO) {
         Timber.tag("Voxly").i("IncrementalScanStrategy scan started")
 
         // 1. Determine the last scan timestamp. The Room cache stores
@@ -80,19 +81,6 @@ class IncrementalScanStrategy @Inject constructor(
         val validPathsSet = allCurrentPaths
         val filteredRetained = retainedFiles.filter { it.path in validPathsSet }
         settingsDataStore.setLastKnownFileCount(allCurrentPaths.size)
-
-        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
-        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
-        val whitelistPaths = if (whitelistEnabled) whitelistRepository.getValidWhitelistPathsOnce() else emptyList()
-        val blacklistPaths = if (blacklistEnabled) whitelistRepository.getValidBlacklistPathsOnce() else emptyList()
-        val filterSettings = FilterEngine.FilterSettings(
-            whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
-            blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
-            minDurationEnabled = false,
-            whitelistPaths = whitelistPaths,
-            blacklistPaths = blacklistPaths,
-            minDurationMs = 0L
-        )
 
         if (updatedFiles.isEmpty()) {
             return@withContext filterEngine.applyFilters(filteredRetained, filterSettings)
