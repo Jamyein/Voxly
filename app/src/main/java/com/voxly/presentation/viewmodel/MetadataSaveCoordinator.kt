@@ -7,10 +7,11 @@ import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
+import com.voxly.domain.repository.ChangeSource
+import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.usecase.SaveMetadataResult
 import com.voxly.domain.usecase.SaveMetadataUseCase
-import com.voxly.domain.usecase.UnifiedScanManager
 import coil3.SingletonImageLoader
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -37,7 +38,7 @@ class MetadataSaveCoordinator @Inject constructor(
     @ApplicationContext private val context: Context,
     private val saveMetadataUseCase: SaveMetadataUseCase,
     private val replayGainRepository: ReplayGainRepository,
-    private val unifiedScanManager: UnifiedScanManager,
+    private val libraryDataHolder: LibraryDataHolder,
     private val musicLibraryCache: MusicLibraryCache,
     private val audioFileScanner: AudioFileScanner,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope
@@ -88,7 +89,7 @@ class MetadataSaveCoordinator @Inject constructor(
                     }
 
                     applicationScope.launch {
-                        unifiedScanManager.syncFile(filePath).getOrNull()
+                        libraryDataHolder.requestSingleFileSync(filePath, source = ChangeSource.FILE_EDIT)
                         musicLibraryCache.markFileAsEditedByUser(filePath)
 
                         val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)

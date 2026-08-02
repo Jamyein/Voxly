@@ -5,10 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.WhitelistDirectory
+import com.voxly.domain.repository.ChangeSource
+import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.domain.repository.WhitelistRepository
 import com.voxly.domain.usecase.RebuildDatabaseManager
 import com.voxly.domain.usecase.RebuildDatabaseState
-import com.voxly.domain.usecase.UnifiedScanManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,7 @@ import javax.inject.Inject
 class DirectoryManagementViewModel @Inject constructor(
     private val whitelistRepository: WhitelistRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val unifiedScanManager: UnifiedScanManager,
+    private val libraryDataHolder: LibraryDataHolder,
     private val rebuildDatabaseManager: RebuildDatabaseManager
 ) : ViewModel() {
 
@@ -54,7 +55,11 @@ class DirectoryManagementViewModel @Inject constructor(
             val path = getPathFromUri(directoryUri)
             if (path.isNotBlank()) {
                 whitelistRepository.addWhitelistDirectory(directoryUri.toString(), path)
-                unifiedScanManager.syncDirectories()
+                libraryDataHolder.requestGlobalRefresh(
+                    forceRefresh = false,
+                    bypassVersionCache = true,
+                    source = ChangeSource.DIRECTORY_MANAGEMENT
+                )
             }
         }
     }
@@ -62,7 +67,11 @@ class DirectoryManagementViewModel @Inject constructor(
     fun removeDirectory(directoryUri: String) {
         viewModelScope.launch {
             whitelistRepository.removeWhitelistDirectory(directoryUri)
-            unifiedScanManager.syncDirectories()
+            libraryDataHolder.requestGlobalRefresh(
+                forceRefresh = false,
+                bypassVersionCache = true,
+                source = ChangeSource.DIRECTORY_MANAGEMENT
+            )
         }
     }
 

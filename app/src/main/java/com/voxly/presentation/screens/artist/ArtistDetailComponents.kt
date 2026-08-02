@@ -237,7 +237,7 @@ fun SongListItem(
                 )
             }
         },
-        headlineContent = {
+        content = {
             Text(
                 text = audioFile.metadata.getDisplayTitle(audioFile.name),
                 style = MaterialTheme.typography.bodyMedium,

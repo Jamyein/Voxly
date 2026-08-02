@@ -132,7 +132,7 @@ fun <T> SortMenuItem(
         colors = MenuDefaults.itemColors(
             textColor = MaterialTheme.colorScheme.onSurface,
             leadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            trailingIconColor = MaterialTheme.colorScheme.primary
+            trailingContentColor = MaterialTheme.colorScheme.primary
         ),
         onClick = {
             onSortOptionChange(option)

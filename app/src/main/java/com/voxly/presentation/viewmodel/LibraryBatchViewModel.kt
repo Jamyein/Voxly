@@ -5,6 +5,7 @@ import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.saf.SafWriteAccessService
+import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.domain.model.BatchResult
 import com.voxly.domain.model.BatchStatus
@@ -88,7 +89,11 @@ class LibraryBatchViewModel @Inject constructor(
                 Timber.tag(TAG).e(e, "Batch operation failed")
             } finally {
                 _isBatchProcessing.update { false }
-                libraryDataHolder.requestRefresh(forceRefresh = false)
+                libraryDataHolder.requestGlobalRefresh(
+                    forceRefresh = false,
+                    bypassVersionCache = true,
+                    source = ChangeSource.BATCH_EDIT
+                )
             }
         }.also { batchJob = it }
     }

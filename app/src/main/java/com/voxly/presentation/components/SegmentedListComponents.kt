@@ -43,6 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -102,7 +103,11 @@ private val MenuDividerPadding = 4.dp
 
 @Composable
 private fun getConnectedButtonShapes(options: List<*>, btnIndex: Int) = when {
-    options.size == 1 -> ToggleButtonDefaults.shapes()
+    options.size == 1 -> ToggleButtonShapes(
+        shape = ToggleButtonDefaults.shape,
+        pressedShape = ToggleButtonDefaults.pressedShape,
+        checkedShape = ToggleButtonDefaults.checkedShape
+    )
     btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
     btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
@@ -844,7 +849,7 @@ fun AudioFileStandardRow(
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-    headlineContent = {
+        content = {
         Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
@@ -1032,7 +1037,7 @@ fun AudioFileStandardRowWithMenu(
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        headlineContent = {
+            content = {
             Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
         supportingContent = {
@@ -1108,7 +1113,7 @@ fun AudioFileStandardRowCompact(
     colors = ListItemDefaults.colors(
         containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface
     ),
-    headlineContent = {
+        content = {
         Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {

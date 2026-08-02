@@ -56,7 +56,7 @@ internal fun BatchMenuItem(
     onClick: () -> Unit
 ) {
     ListItem(
-        headlineContent = { Text(label) },
+        content = { Text(label) },
         leadingContent = {
             Icon(
                 painter = appIconPainter(icon),

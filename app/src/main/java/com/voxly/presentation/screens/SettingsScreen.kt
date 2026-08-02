@@ -494,7 +494,7 @@ fun PerSourceSearchLimitRow(
     }
 
     ListItem(
-        headlineContent = { Text(text = title) },
+        content = { Text(text = title) },
         supportingContent = {
             Text(
                 text = displayLabel,

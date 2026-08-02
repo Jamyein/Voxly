@@ -9,6 +9,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import com.voxly.data.local.SafTreeWatcher
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryDataHolder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -26,8 +27,9 @@ import javax.inject.Named
 import javax.inject.Singleton
 
 /**
- * Process-lifetime watcher that fires [LibraryDataHolder.requestRefresh] when
- * MediaStore audio content changes are observed.
+ * Process-lifetime watcher that emits a [LibraryChangeEvent.Global] on
+ * [LibraryDataHolder.changeEvents] when MediaStore audio content changes are
+ * observed.
  *
  * Pattern follows the mainstream open-source music apps (Auxio, Phonograph,
  * NewPipe): a long-lived [ContentObserver] is registered on
@@ -94,8 +96,12 @@ class MediaStoreChangeWatcher @Inject constructor(
             _changes
                 .debounce(DEBOUNCE_MS)
                 .collect {
-                    Timber.tag(TAG).d("MediaStore change → requestRefresh → SAF walk")
-                    libraryDataHolder.requestRefresh(forceRefresh = false, bypassVersionCache = true)
+                    Timber.tag(TAG).d("MediaStore change → global refresh → SAF walk")
+                    libraryDataHolder.requestGlobalRefresh(
+                        forceRefresh = false,
+                        bypassVersionCache = true,
+                        source = ChangeSource.MEDIA_STORE
+                    )
 
                     // Phase 4: detect changes in SAF-picked directories that
                     // MediaStore observer doesn't cover (USB drives, SD roots).

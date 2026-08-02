@@ -78,7 +78,7 @@ class BottomBarVisibilityController {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 // Ignore flings from sibling scrollable parents (e.g. a parent LazyColumn
                 // consuming the same gesture). We only react to direct drag.
-                if (source != NestedScrollSource.Drag) return Offset.Zero
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
 
                 val dy = available.y
                 if (dy == 0f) return Offset.Zero

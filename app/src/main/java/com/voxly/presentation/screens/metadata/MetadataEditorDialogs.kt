@@ -138,7 +138,7 @@ fun AlbumArtOptionsSheet(
             Spacer(modifier = Modifier.height(4.dp))
 
             ListItem(
-                headlineContent = { Text(stringResource(R.string.select_album_art)) },
+                content = { Text(stringResource(R.string.select_album_art)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.PhotoLibrary,
@@ -149,7 +149,7 @@ fun AlbumArtOptionsSheet(
             )
 
             ListItem(
-                headlineContent = { Text(stringResource(R.string.take_photo)) },
+                content = { Text(stringResource(R.string.take_photo)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.CameraAlt,
@@ -160,7 +160,7 @@ fun AlbumArtOptionsSheet(
             )
 
             ListItem(
-                headlineContent = { Text(stringResource(R.string.fetch_online_cover_art)) },
+                content = { Text(stringResource(R.string.fetch_online_cover_art)) },
                 leadingContent = {
                     Icon(
                         Icons.Default.CloudDownload,
@@ -174,7 +174,7 @@ fun AlbumArtOptionsSheet(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.album_art_view)) },
+                    content = { Text(stringResource(R.string.album_art_view)) },
                     leadingContent = {
                         Icon(
                             Icons.Default.ZoomIn,
@@ -185,7 +185,7 @@ fun AlbumArtOptionsSheet(
                 )
 
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.album_art_rotate)) },
+                    content = { Text(stringResource(R.string.album_art_rotate)) },
                     leadingContent = {
                         Icon(
                             Icons.AutoMirrored.Filled.RotateRight,
@@ -196,7 +196,7 @@ fun AlbumArtOptionsSheet(
                 )
 
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.remove_album_art)) },
+                    content = { Text(stringResource(R.string.remove_album_art)) },
                     leadingContent = {
                         Icon(
                             Icons.Default.Delete,

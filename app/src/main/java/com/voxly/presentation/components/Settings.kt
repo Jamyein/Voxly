@@ -29,7 +29,7 @@ fun SettingsClickableRow(
     trailingContent: (@Composable () -> Unit)? = null
 ) {
     ListItem(
-        headlineContent = { Text(text = title) },
+        content = { Text(text = title) },
         supportingContent = { Text(text = subtitle) },
         trailingContent = {
             if (trailingContent != null) {
@@ -56,7 +56,7 @@ fun SettingsInfoRow(
     modifier: Modifier = Modifier
 ) {
     ListItem(
-        headlineContent = {
+        content = {
             Text(
                 text = title,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -77,7 +77,7 @@ fun SettingsSwitchRow(
     modifier: Modifier = Modifier
 ) {
     ListItem(
-        headlineContent = { Text(text = title) },
+        content = { Text(text = title) },
         supportingContent = { Text(text = subtitle) },
         trailingContent = {
             Switch(
@@ -112,7 +112,7 @@ fun SettingsSliderRow(
             )
     ) {
         ListItem(
-            headlineContent = { Text(text = title) },
+            content = { Text(text = title) },
             supportingContent = { Text(text = subtitle) },
             trailingContent = {
                 Text(

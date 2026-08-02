@@ -751,7 +751,7 @@ private val nativeAudioDecoder = NativeAudioDecoder()
                                 albumRange = null,
                                 referenceLoudness = natResult[5].toFloat()
                             )
-                            scanner?.close()
+                            scanner.close()
                             scanner = null
                             primaryFailed = false
                         } else {
@@ -788,7 +788,7 @@ private val nativeAudioDecoder = NativeAudioDecoder()
                 }
             } else if (primaryFailed) {
                 Timber.w("Decoder failed for ${file.name} (no fallback available)")
-                scanner?.close()
+                scanner.close()
                 return DecoderScanResult(null, null)
             }
 

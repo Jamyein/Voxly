@@ -7,6 +7,8 @@ import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.SortUtil
+import com.voxly.domain.repository.ChangeSource
+import com.voxly.domain.repository.LibraryChangeEvent
 import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.UiStateDataStore
@@ -72,6 +74,7 @@ class LibraryScanViewModel @Inject constructor(
         private const val TAG = "LibraryScanViewModel"
         private const val STATE_FLOW_TIMEOUT_MS = 5000L
         private const val RESUME_REFRESH_THROTTLE_MS = 3_000L
+        private const val EVENT_MERGE_WINDOW_MS = 400L
     }
 
     // allAudios reads directly from the Room-backed cache (cachedAudioFilesStateFlow)
@@ -235,6 +238,93 @@ class LibraryScanViewModel @Inject constructor(
     // calls cannot race.
     private var directoryScanJob: Job? = null
 
+    // ─── Unified change-event bus merge state ───────────────────────────
+    // Incoming LibraryChangeEvents are coalesced here before a scan runs:
+    // a pending Global supersedes all pending Directory events (it covers
+    // them), and Directory events for different URIs merge into one scan.
+    private var pendingGlobal: LibraryChangeEvent.Global? = null
+    private val pendingDirectories = LinkedHashMap<String, LibraryChangeEvent.Directory>()
+    private var flushJob: Job? = null
+
+    /**
+     * Merges a [LibraryChangeEvent] into the pending state.
+     *  - [LibraryChangeEvent.SingleFile] hot-syncs immediately (no merge).
+     *  - [LibraryChangeEvent.Directory] coalesces per directory URI.
+     *  - [LibraryChangeEvent.Global] / [LibraryChangeEvent.SnapshotCheck]
+     *    supersede all pending directory work and schedule one merged scan.
+     */
+    private fun handleChangeEvent(event: LibraryChangeEvent) {
+        when (event) {
+            is LibraryChangeEvent.SingleFile -> handleSingleFileSync(event.filePath)
+            is LibraryChangeEvent.Directory -> {
+                if (pendingGlobal != null) return
+                pendingDirectories[event.directoryUri] = event
+                scheduleFlush()
+            }
+            is LibraryChangeEvent.Global -> {
+                pendingGlobal = event
+                pendingDirectories.clear()
+                scheduleFlush()
+            }
+            is LibraryChangeEvent.SnapshotCheck -> {
+                if (pendingGlobal == null) {
+                    pendingGlobal = LibraryChangeEvent.Global(
+                        forceRefresh = false,
+                        bypassVersionCache = true,
+                        source = ChangeSource.COLD_START
+                    )
+                }
+                scheduleFlush()
+            }
+        }
+    }
+
+    private fun scheduleFlush() {
+        flushJob?.cancel()
+        flushJob = viewModelScope.launch {
+            delay(EVENT_MERGE_WINDOW_MS)
+            flushPendingEvents()
+        }
+    }
+
+    private suspend fun flushPendingEvents() {
+        val global = pendingGlobal
+        pendingGlobal = null
+        if (global != null) {
+            loadAudioFiles(
+                forceRefresh = global.forceRefresh,
+                isIncremental = !global.forceRefresh,
+                bypassVersionCache = global.bypassVersionCache,
+            )
+            return
+        }
+
+        val dirs = pendingDirectories.values.toList()
+        pendingDirectories.clear()
+        if (dirs.isEmpty()) return
+
+        val uris = dirs.map { it.directoryUri }.toSet()
+        val selected = _selectedDirectories.value.filter { it.uri in uris }
+        if (selected.isEmpty()) return
+
+        launchDirectoryScan(
+            directories = selected,
+            isIncremental = true,
+            forceRefresh = dirs.any { it.forceRefresh }
+        )
+    }
+
+    /**
+     * Hot-syncs a single file to the cache (metadata edit / file change).
+     * Runs immediately — not debounced — so the edited metadata reaches the
+     * UI in the same frame as the save completes.
+     */
+    private fun handleSingleFileSync(filePath: String) {
+        viewModelScope.launch {
+            unifiedScanManager.syncFile(filePath)
+        }
+    }
+
     /**
      * Runs a directory-scoped scan with proper cancellation of any prior run.
      * All call sites of [scanSelectedDirectories] should funnel through here.
@@ -256,26 +346,16 @@ class LibraryScanViewModel @Inject constructor(
     }
 
     init {
+        // Unified change-event bus consumer. Every refresh trigger
+        // (MediaStore observer, SAF watcher, pull-to-refresh, batch edits,
+        // metadata save, on-resume, cold start) emits a LibraryChangeEvent via
+        // LibraryDataHolder. Events are merged here: SingleFile hot-syncs run
+        // immediately, Directory events coalesce per directory, and a Global
+        // request supersedes all pending directory scans — so a burst of
+        // triggers collapses into a single merged scan.
         viewModelScope.launch {
-            // collectLatest cancels the in-flight loadAudioFiles when a new
-            // refresh request arrives. Combined with LibraryDataHolder's
-            // conflated SharedFlow (extraBufferCapacity=1, DROP_OLDEST), this
-            // collapses rapid bursts (e.g. user pulling on multiple screens in
-            // succession) into the latest request and discards intermediate
-            // work — preventing the "N concurrent scans queued" race.
-            //
-            // bypassVersionCache is forwarded verbatim: user-initiated pulls
-            // (Files/Albums/Artists) set it true so the spinner always
-            // corresponds to a real scan; system triggers keep it false so
-            // the MediaStore version short-circuit still protects them.
-            libraryDataHolder.refreshTriggers()
-                .collectLatest { request ->
-                    loadAudioFiles(
-                        forceRefresh = request.forceRefresh,
-                        isIncremental = !request.forceRefresh,
-                        bypassVersionCache = request.bypassVersionCache,
-                    )
-                }
+            libraryDataHolder.changeEvents()
+                .collect { event -> handleChangeEvent(event) }
         }
 
         // React to changes in the selected directory URIs (written by
@@ -353,13 +433,14 @@ class LibraryScanViewModel @Inject constructor(
         // MediaStore version short-circuit in loadAudioFiles skips SAF-only
         // deletions entirely (the version doesn't change for SAF trees).
         //
-        // bypassVersionCache=true skips both the version short-circuit and
-        // (via the cache-serving branch's !bypassVersionCache gate) the
-        // whitelist cache-serve, so the incremental scan actually executes
-        // and purges deleted files for both whitelist and global paths.
-        // collectLatest conflation coalesces this with any concurrent
-        // refresh request so no double scan runs.
-        libraryDataHolder.requestRefresh(forceRefresh = false, bypassVersionCache = true)
+        // SnapshotCheck maps to a global incremental scan with
+        // bypassVersionCache=true (skips both the version short-circuit and,
+        // via the cache-serving branch's !bypassVersionCache gate, the
+        // whitelist cache-serve), so the incremental scan actually executes
+        // and purges deleted files for both whitelist and global paths. The
+        // merge window coalesces this with any concurrent refresh request so
+        // no double scan runs.
+        libraryDataHolder.requestSnapshotCheck()
     }
 
     /**
@@ -487,7 +568,11 @@ class LibraryScanViewModel @Inject constructor(
      */
     fun refresh(forceRefresh: Boolean = false) {
         Timber.tag("Voxly").i("LibraryScanViewModel scan triggered: incremental=${!forceRefresh}")
-        loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
+        libraryDataHolder.requestGlobalRefresh(
+            forceRefresh = forceRefresh,
+            bypassVersionCache = true,
+            source = ChangeSource.PULL_TO_REFRESH
+        )
     }
 
     /**
@@ -513,21 +598,29 @@ class LibraryScanViewModel @Inject constructor(
      * [com.voxly.data.local.scanner.IncrementalScanStrategy], which calls
      * [com.voxly.data.local.MusicLibraryCache.cleanupDeletedFiles].
      *
-     * `collectLatest` conflation in the init block coalesces this with any
-     * concurrent refresh request (e.g. the cold-start request from
+     * The event-bus merge window in [handleChangeEvent] coalesces this with
+     * any concurrent refresh request (e.g. the cold-start request from
      * [checkDirectorySnapshotsOnStart]) so no double scan runs.
      */
     fun refreshOnResume() {
         val now = System.currentTimeMillis()
         if (now - lastResumeRefreshAt < RESUME_REFRESH_THROTTLE_MS) return
         lastResumeRefreshAt = now
-        libraryDataHolder.requestRefresh(forceRefresh = false, bypassVersionCache = true)
+        libraryDataHolder.requestGlobalRefresh(
+            forceRefresh = false,
+            bypassVersionCache = true,
+            source = ChangeSource.ON_RESUME
+        )
     }
 
     fun refreshDirectoryIncremental(directoryUri: String) {
-        val dirs = _selectedDirectories.value.filter { it.uri == directoryUri }
-        if (dirs.isEmpty()) return
-        launchDirectoryScan(dirs, isIncremental = true, forceRefresh = false)
+        val dir = _selectedDirectories.value.firstOrNull { it.uri == directoryUri } ?: return
+        libraryDataHolder.requestDirectoryRefresh(
+            directoryUri = dir.uri,
+            directoryPath = dir.path,
+            forceRefresh = false,
+            source = ChangeSource.PULL_TO_REFRESH
+        )
     }
 
     fun syncAndScanDirectoriesIncremental() {
@@ -577,14 +670,16 @@ class LibraryScanViewModel @Inject constructor(
         val alreadyLoaded = uriString in _directoryFiles.value
 
         if (alreadySelected) {
-            if (alreadyLoaded) {
-                val dirs = _selectedDirectories.value.filter { it.uri == uriString }
-                launchDirectoryScan(dirs, isIncremental = true, forceRefresh = false)
-            } else {
-                _directoryFiles.update { it - uriString }
-                val dirs = _selectedDirectories.value.filter { it.uri == uriString }
-                launchDirectoryScan(dirs, isIncremental = false, forceRefresh = true)
-            }
+            // Route through the unified bus: a loaded dir gets an incremental
+            // scan, a selected-but-empty dir gets a full rescan.
+            val force = !alreadyLoaded
+            if (force) _directoryFiles.update { it - uriString }
+            libraryDataHolder.requestDirectoryRefresh(
+                directoryUri = uriString,
+                directoryPath = filePath,
+                forceRefresh = force,
+                source = ChangeSource.DIRECTORY_MANAGEMENT
+            )
             return
         }
 
@@ -595,10 +690,11 @@ class LibraryScanViewModel @Inject constructor(
 
         _selectedDirectories.update { updatedDirectories }
         persistSelectedDirectories(updatedDirectories)
-        launchDirectoryScan(
-            directories = updatedDirectories,
-            isIncremental = false,
-            forceRefresh = true
+        libraryDataHolder.requestDirectoryRefresh(
+            directoryUri = uriString,
+            directoryPath = filePath,
+            forceRefresh = true,
+            source = ChangeSource.DIRECTORY_MANAGEMENT
         )
     }
 
@@ -613,7 +709,11 @@ class LibraryScanViewModel @Inject constructor(
             _openedDirectoryUri.update { null }
         }
         persistSelectedDirectories(updatedDirectories)
-        loadAudioFiles()
+        libraryDataHolder.requestGlobalRefresh(
+            forceRefresh = false,
+            bypassVersionCache = true,
+            source = ChangeSource.DIRECTORY_MANAGEMENT
+        )
     }
 
     /**
@@ -624,7 +724,11 @@ class LibraryScanViewModel @Inject constructor(
         _directoryFiles.update { emptyMap() }
         _openedDirectoryUri.update { null }
         persistSelectedDirectories(emptyList())
-        loadAudioFiles()
+        libraryDataHolder.requestGlobalRefresh(
+            forceRefresh = false,
+            bypassVersionCache = true,
+            source = ChangeSource.DIRECTORY_MANAGEMENT
+        )
     }
 
     fun openDirectory(directoryUri: String) {
@@ -804,7 +908,9 @@ class LibraryScanViewModel @Inject constructor(
                 if (path.isBlank()) null else SelectedDirectory(uri = uriString, path = path)
             }
             _selectedDirectories.update { restored }
-            loadAudioFiles()
+            // Cold-start scan through the unified bus (merges with the
+            // SnapshotCheck emitted by checkDirectorySnapshotsOnStart).
+            libraryDataHolder.requestSnapshotCheck()
         }
     }
 
@@ -889,7 +995,11 @@ class LibraryScanViewModel @Inject constructor(
                 viewModelScope.launch {
                     musicLibraryCache.removeFromCache(filePath)
                 }
-                loadAudioFiles(forceRefresh = false, isIncremental = true, bypassVersionCache = true)
+                libraryDataHolder.requestGlobalRefresh(
+                    forceRefresh = false,
+                    bypassVersionCache = true,
+                    source = ChangeSource.FILE_EDIT
+                )
             }
         }
     }
@@ -918,7 +1028,11 @@ class LibraryScanViewModel @Inject constructor(
                 viewModelScope.launch {
                     musicLibraryCache.removeFromCache(filePath)
                 }
-                loadAudioFiles(forceRefresh = false, isIncremental = true, bypassVersionCache = true)
+                libraryDataHolder.requestGlobalRefresh(
+                    forceRefresh = false,
+                    bypassVersionCache = true,
+                    source = ChangeSource.FILE_EDIT
+                )
             }
         }
     }

@@ -50,13 +50,13 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 | Kotlin | 2.4.0 (via AGP built-in + Compose/Serialization plugins) |
 | Gradle | 9.4.1 |
 | KSP | 2.3.9 (KSP2 semver — supports current Kotlin) |
-| Compose BOM | 2026.05.01 |
-| Material3 | 1.5.0-alpha21 (overrides BOM) |
-| Compose Animation | 1.11.2 (overrides BOM) |
+| Compose BOM | compose-bom-beta 2026.07.01 |
+| Material3 | 1.5.0-alpha25 (overrides BOM) |
+| Compose Animation | 1.11.4 (overrides BOM) |
 | Foundation-layout | BOM-resolved (separate artifact for FlexBox/Grid APIs) |
-| Navigation3 | 1.1.2 |
-| adaptive-navigation3 | 1.3.0-beta02 |
-| Hilt | 2.59.2 (requires `kotlin-metadata-jvm` override — see lesson #18) |
+| Navigation3 | 1.1.5 |
+| adaptive-navigation3 | 1.3.0-rc01 |
+| Hilt | 2.60.1 (requires `kotlin-metadata-jvm` override — see lesson #2) |
 | Room | 2.8.4 (KSP, not kapt) |
 | Coil | 3.5.0 |
 | Retrofit | 3.0.0 |
@@ -99,7 +99,7 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 ## Framework pitfalls
 - **Navigation3**: Routes are `@Serializable` data classes/objects implementing `NavKey`. `NavDisplay` + `TopLevelBackStack`. Shared element transitions use `SharedTransitionLayout`.
 - **Hilt + WorkManager**: Default `WorkManagerInitializer` is disabled in manifest; `HiltWorkerFactory` is used.
-- **Opt-in required**: `@OptIn(ExperimentalMaterial3ExpressiveApi::class)` on all MD3 Expressive composables. Compiler arg: `-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi`.
+- **Opt-in required**: `@OptIn(ExperimentalMaterial3ExpressiveApi::class)` on all MD3 Expressive composables; Tooltip/`ExperimentalMaterial3Api` APIs need `ExperimentalMaterial3Api` too. Compiler arg: `-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi`.
 - **Coil3**: `SingletonImageLoader.Factory` on Application. All `ImageRequest.Builder` must call `.size(px)` — never rely on View layout for size inference.
 - **Single flavor** "github" (default). No other build flavors.
 - **No version catalog** — deps declared inline in app/build.gradle.kts.

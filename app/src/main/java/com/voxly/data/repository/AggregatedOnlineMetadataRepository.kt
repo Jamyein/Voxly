@@ -66,6 +66,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    @Suppress("UNCHECKED_CAST")
     private val settingsFlow: StateFlow<OnlineSourceSettings> = combine(
         settingsDataStore.metadataSourceEnabledMusicBrainz,
         settingsDataStore.metadataSourceEnabledITunes,

@@ -3,6 +3,8 @@ package com.voxly.data.local
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import com.voxly.core.util.PathUtils
+import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryDataHolder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -17,8 +19,9 @@ import javax.inject.Singleton
  * subdirectories) that MediaStore's ContentObserver does NOT cover.
  *
  * Uses a simple file-count heuristic: walk the tree, count files, compare
- * against the last-seen count. When the count differs, triggers
- * [LibraryDataHolder.requestRefresh] .
+ * against the last-seen count. When the count differs, emits a targeted
+ * [LibraryChangeEvent.Directory] for that tree so the library updates just
+ * that directory (merged with any concurrent directory changes).
  *
  * SAF tree observation is inherently poll-based (no inotify for content
  * URIs). Uses an in-memory [WeakHashMap] for the count cache — lost on
@@ -30,15 +33,16 @@ class SafTreeWatcher @Inject constructor(
     private val libraryDataHolder: LibraryDataHolder,
 ) {
     /**
-     * Walk all user-selected SAF directories, detect changes, and trigger
-     * refresh if any directory's file count changed since last check.
+     * Walk all user-selected SAF directories, detect changes, and emit a
+     * directory refresh for any directory whose file count changed since
+     * the last check.
      *
      * Called from [MediaStoreChangeWatcher] after the debounced observer
      * fires (application-scoped coroutine).
      */
     suspend fun detectChanges(dirUris: List<String>) = withContext(Dispatchers.IO) {
         if (dirUris.isEmpty()) return@withContext
-        var changed = false
+        val changedDirs = mutableListOf<Pair<String, String>>() // uri to path
 
         for (uriString in dirUris) {
             if (!uriString.startsWith("content://")) continue
@@ -50,15 +54,22 @@ class SafTreeWatcher @Inject constructor(
 
             if (previousCount >= 0 && currentCount != previousCount) {
                 Timber.tag(TAG).i("SAF dir changed: $uriString ($previousCount → $currentCount files)")
-                changed = true
+                changedDirs.add(uriString to PathUtils.getPathFromUri(uri))
             }
 
             fileCountCache[uriString] = currentCount
         }
 
-        if (changed) {
-            libraryDataHolder.requestRefresh(forceRefresh = false, bypassVersionCache = true)
-            Timber.tag(TAG).i("SAF tree change detected, refresh requested")
+        changedDirs.forEach { (uri, path) ->
+            libraryDataHolder.requestDirectoryRefresh(
+                directoryUri = uri,
+                directoryPath = path,
+                forceRefresh = false,
+                source = ChangeSource.SAF_TREE
+            )
+        }
+        if (changedDirs.isNotEmpty()) {
+            Timber.tag(TAG).i("SAF tree change detected, ${changedDirs.size} dir(s) refresh requested")
         }
     }
 
