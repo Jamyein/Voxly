@@ -400,21 +400,6 @@ class LibraryScanViewModel @Inject constructor(
                 }
             }
         }
-
-        viewModelScope.launch {
-            delay(300L)
-            libraryRepository.scanState.collect { state ->
-                when (state) {
-                    is ScanState.Success -> Timber.d(TAG, "Scan completed")
-                    is ScanState.Error -> {
-                        Timber.tag(TAG).e("Scan error: ${state.message}")
-                        _scanError.tryEmit(state.message)
-                        libraryDataHolder.emitScanError(state.message)
-                    }
-                    else -> { }
-                }
-            }
-        }
     }
 
     private suspend fun checkDirectorySnapshotsOnStart() {
