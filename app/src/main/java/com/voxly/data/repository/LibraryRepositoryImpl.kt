@@ -2,6 +2,7 @@ package com.voxly.data.repository
 
 import com.voxly.core.util.Constants
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.MediaStoreVersionCache
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.AlbumGroup
@@ -59,6 +60,7 @@ class LibraryRepositoryImpl @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
     private val musicLibraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
+    private val mediaStoreVersionCache: MediaStoreVersionCache,
     private val whitelistRepository: WhitelistRepository,
     @Named("ApplicationScope") private val scope: CoroutineScope,
 ) : LibraryRepository {
@@ -99,11 +101,28 @@ class LibraryRepositoryImpl @Inject constructor(
         bypassVersionCache: Boolean,
         source: ChangeSource,
     ) {
-        libraryDataHolder.requestGlobalRefresh(
-            forceRefresh = forceRefresh,
-            bypassVersionCache = bypassVersionCache,
-            source = source
-        )
+        scope.launch {
+            // MediaStore version short-circuit (moved from LibraryScanViewModel):
+            // if the audio collection version is unchanged since the last
+            // successful scan and we already have cached data, the mtime diff
+            // inside the incremental scan would be a no-op anyway. Skip the
+            // whole refresh request. Skipped on force-refresh (full rescan)
+            // AND on user-initiated refreshes (bypassVersionCache=true) so the
+            // spinner always corresponds to a real scan attempt.
+            if (!forceRefresh && !bypassVersionCache && audioFileScanner.hasCachedData()) {
+                val currentVersion = mediaStoreVersionCache.current()
+                val lastVersion = settingsDataStore.lastKnownMediaStoreVersion.first()
+                if (lastVersion.isNotEmpty() && currentVersion == lastVersion) {
+                    Timber.d(TAG, "MediaStore version unchanged ($currentVersion), skipping refresh")
+                    return@launch
+                }
+            }
+            libraryDataHolder.requestGlobalRefresh(
+                forceRefresh = forceRefresh,
+                bypassVersionCache = bypassVersionCache,
+                source = source
+            )
+        }
     }
 
     private suspend fun scan(

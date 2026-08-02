@@ -18,7 +18,6 @@ import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
-import com.voxly.domain.model.CacheChange
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.domain.repository.ScanState
@@ -145,8 +144,20 @@ class LibraryScanViewModel @Inject constructor(
     private val _selectedDirectories = MutableStateFlow<List<SelectedDirectory>>(emptyList())
     val selectedDirectories: StateFlow<List<SelectedDirectory>> = _selectedDirectories.asStateFlow()
 
-    private val _directoryFiles = MutableStateFlow<Map<String, List<AudioFile>>>(emptyMap())
-    val directoryFiles: StateFlow<Map<String, List<AudioFile>>> = _directoryFiles.asStateFlow()
+    // Directory-scoped files derived from the full cache flow, grouped by
+    // selected directory. Stays in sync automatically whenever the cache
+    // (allAudios — Room-backed) or the selection changes; no manual
+    // bookkeeping on scan. Every selected dir appears (possibly empty list).
+    val directoryFiles: StateFlow<Map<String, List<AudioFile>>> = combine(
+        allAudios,
+        selectedDirectories
+    ) { audios, dirs ->
+        groupFilesBySelectedDirectory(audios, dirs)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+        initialValue = emptyMap()
+    )
 
     val sortedDirectoryFiles: StateFlow<Map<String, List<AudioFile>>> = combine(
         directoryFiles,
@@ -392,28 +403,13 @@ class LibraryScanViewModel @Inject constructor(
 
         viewModelScope.launch {
             delay(300L)
-            musicLibraryCache.changeFlow.collect { change ->
-                when (change) {
-                    is CacheChange.FileUpdated -> {
-                        val updatedFile = musicLibraryCache.getCachedFile(change.filePath)
-                        updatedFile?.let { file ->
-                            _directoryFiles.update { currentMap ->
-                                currentMap.mapValues { (_, files) ->
-                                    if (files.any { it.path == file.path }) {
-                                        files.map { if (it.path == file.path) file else it }
-                                    } else {
-                                        files
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    is CacheChange.FileDeleted -> {
-                        _directoryFiles.update { currentMap ->
-                            currentMap.mapValues { (_, files) ->
-                                files.filter { it.path != change.filePath }
-                            }.filterValues { it.isNotEmpty() }
-                        }
+            libraryRepository.scanState.collect { state ->
+                when (state) {
+                    is ScanState.Success -> Timber.d(TAG, "Scan completed")
+                    is ScanState.Error -> {
+                        Timber.tag(TAG).e("Scan error: ${state.message}")
+                        _scanError.tryEmit(state.message)
+                        libraryDataHolder.emitScanError(state.message)
                     }
                     else -> { }
                 }
@@ -478,30 +474,16 @@ class LibraryScanViewModel @Inject constructor(
                 // intentionally omitted from the hot scan path. It runs only
                 // when the DataStore value actually changes.
 
-                // MediaStore version short-circuit: if the audio collection
-                // version is unchanged since the last successful scan and we
-                // already have cached data, the mtime diff inside the
-                // incremental scan would be a no-op anyway. Bail out early
-                // with the existing cache. Skipped on force-refresh (full
-                // rescan) AND on user-initiated pull-to-refresh
-                // (bypassVersionCache=true) so the spinner always
-                // corresponds to a real scan attempt.
-                if (!forceRefresh && !bypassVersionCache && audioFileScanner.hasCachedData()) {
-                    val currentVersion = mediaStoreVersionCache.current()
-                    val lastVersion = settingsDataStore.lastKnownMediaStoreVersion.first()
-                    if (lastVersion.isNotEmpty() && currentVersion == lastVersion) {
-                        Timber.tag(TAG).d("MediaStore version unchanged ($currentVersion), skipping scan")
-                        _isInitialLoad.update { false }
-                        return@launch
-                    }
-                }
+                // The MediaStore version short-circuit lives in
+                // LibraryRepositoryImpl.refresh(): unchanged version + cached
+                // data bails out before a request ever reaches the event bus.
 
                 if (_selectedDirectories.value.isNotEmpty()) {
                     val hasCache = audioFileScanner.hasCachedData()
                     if (!forceRefresh && hasCache && !bypassVersionCache) {
-                        val cachedFiles = musicLibraryCache.getCachedAudioFilesOnce()
-                        val grouped = groupFilesBySelectedDirectory(cachedFiles, _selectedDirectories.value)
-                        _directoryFiles.update { grouped }
+                        // Cache-served path: directoryFiles is derived from
+                        // allAudios (Room-backed), so the cache already
+                        // populates it. Nothing to write here.
                     } else {
                         val useIncremental = isIncremental && hasCache
                         // Awaited synchronously so cancellation of scanJob
@@ -520,7 +502,6 @@ class LibraryScanViewModel @Inject constructor(
                         incremental = isIncremental,
                         forceRefresh = forceRefresh
                     )
-                    _directoryFiles.update { emptyMap() }
                 } else if (isIncremental) {
                     // Previously called audioFileScanner.loadAudioFiles(true),
                     // which short-circuited on cache hits and silently skipped
@@ -666,13 +647,12 @@ class LibraryScanViewModel @Inject constructor(
         }
 
         val alreadySelected = _selectedDirectories.value.any { it.uri == uriString }
-        val alreadyLoaded = uriString in _directoryFiles.value
+        val alreadyLoaded = directoryFiles.value[uriString]?.isNotEmpty() == true
 
         if (alreadySelected) {
             // Route through the unified bus: a loaded dir gets an incremental
             // scan, a selected-but-empty dir gets a full rescan.
             val force = !alreadyLoaded
-            if (force) _directoryFiles.update { it - uriString }
             libraryDataHolder.requestDirectoryRefresh(
                 directoryUri = uriString,
                 directoryPath = filePath,
@@ -703,7 +683,6 @@ class LibraryScanViewModel @Inject constructor(
     fun removeDirectory(directoryUri: String) {
         val updatedDirectories = _selectedDirectories.value.filterNot { it.uri == directoryUri }
         _selectedDirectories.update { updatedDirectories }
-        _directoryFiles.update { it - directoryUri }
         if (_openedDirectoryUri.value == directoryUri) {
             _openedDirectoryUri.update { null }
         }
@@ -720,7 +699,6 @@ class LibraryScanViewModel @Inject constructor(
      */
     fun clearDirectories() {
         _selectedDirectories.update { emptyList() }
-        _directoryFiles.update { emptyMap() }
         _openedDirectoryUri.update { null }
         persistSelectedDirectories(emptyList())
         libraryRepository.refresh(
@@ -745,14 +723,6 @@ class LibraryScanViewModel @Inject constructor(
     ) {
         Timber.d(TAG, "Scanning ${directories.size} directories (incremental=$isIncremental, force=$forceRefresh)")
 
-        val allDirsLoaded = directories.all { it.uri in _directoryFiles.value }
-        if (allDirsLoaded && !forceRefresh && !isIncremental) {
-            Timber.d(TAG, "All directories already loaded in _directoryFiles, skipping scan")
-            // Refreshing lifecycle is managed by the caller
-            // (loadAudioFiles / launchDirectoryScan) — no state to touch here.
-            return
-        }
-
         val dirUris = directories.map { it.uri }.toSet()
         _directoryLoadingState.update { it + dirUris }
 
@@ -772,9 +742,8 @@ class LibraryScanViewModel @Inject constructor(
                 }
             }
 
-            _directoryFiles.update { currentMap ->
-                currentMap + filesByDir
-            }
+            // directoryFiles is derived from allAudios (Room cache), which the
+            // scan above has already updated — nothing to write here.
 
             directories.forEach { dir ->
                     val fileCount = filesByDir[dir.uri]?.size ?: 0
@@ -889,9 +858,6 @@ class LibraryScanViewModel @Inject constructor(
         }
         if (restored.map { it.uri } != _selectedDirectories.value.map { it.uri }) {
             _selectedDirectories.update { restored }
-            _directoryFiles.update { it.filterKeys { key ->
-                restored.any { it.uri == key }
-            } }
             if (_openedDirectoryUri.value != null && restored.none { it.uri == _openedDirectoryUri.value }) {
                 _openedDirectoryUri.update { null }
             }
