@@ -146,7 +146,18 @@ class EnrichmentWorker @AssistedInject constructor(
                         albumArtist = cachedFile.metadata.albumArtist ?: complete?.metadata?.albumArtist,
                         year = cachedFile.metadata.year ?: complete?.metadata?.year,
                         genre = cachedFile.metadata.genre ?: complete?.metadata?.genre,
-                        composer = cachedFile.metadata.composer ?: complete?.metadata?.composer
+                        composer = cachedFile.metadata.composer ?: complete?.metadata?.composer,
+                        lyricist = cachedFile.metadata.lyricist ?: complete?.metadata?.lyricist,
+                        conductor = cachedFile.metadata.conductor ?: complete?.metadata?.conductor,
+                        originalArtist = cachedFile.metadata.originalArtist ?: complete?.metadata?.originalArtist,
+                        comment = cachedFile.metadata.comment ?: complete?.metadata?.comment,
+                        lyrics = cachedFile.metadata.lyrics ?: complete?.metadata?.lyrics,
+                        trackNumber = cachedFile.metadata.trackNumber ?: complete?.metadata?.trackNumber,
+                        totalTracks = cachedFile.metadata.totalTracks ?: complete?.metadata?.totalTracks,
+                        discNumber = cachedFile.metadata.discNumber ?: complete?.metadata?.discNumber,
+                        totalDiscs = cachedFile.metadata.totalDiscs ?: complete?.metadata?.totalDiscs,
+                        customFields = cachedFile.metadata.customFields.takeIf { it.isNotEmpty() }
+                            ?: complete?.metadata?.customFields ?: emptyMap()
                     )
                 )
             }

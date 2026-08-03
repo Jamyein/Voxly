@@ -91,15 +91,17 @@ class AudioRepositoryImpl @Inject constructor(
                     cachedEntity.fileLastModifiedAt == fileLastModified
 
                 if (cachedFile != null && isFileUnchanged) {
-                    val mergedMeta = if (includeAlbumArt) {
-                        val complete = metadataProcessor.readAllMetadata(
-                            normalizedPath, includeAlbumArt = true, bypassCache = true
-                        )
-                        val primary = complete?.metadata
-                        mergeWithFallback(primary, cachedFile.metadata) ?: primary ?: cachedFile.metadata
-                    } else {
-                        cachedFile.metadata
-                    }
+                    // Read the file even on a cache hit so detailed fields (lyrics,
+                    // comment, lyricist, ...) that the scan pipeline never persists
+                    // still reach the editor. includeAlbumArt=false keeps this cheap
+                    // (no picture read). HI-8 made this conditional on includeAlbumArt,
+                    // which regressed the metadata editor to empty lyrics.
+                    val complete = metadataProcessor.readAllMetadata(
+                        normalizedPath, includeAlbumArt = includeAlbumArt, bypassCache = true
+                    )
+                    val primary = complete?.metadata
+                    val mergedMeta = mergeWithFallback(primary, cachedFile.metadata)
+                        ?: primary ?: cachedFile.metadata
                     val resultFile = cachedFile.copy(metadata = mergedMeta)
                     return@withContext Result.success(resultFile)
                 }
