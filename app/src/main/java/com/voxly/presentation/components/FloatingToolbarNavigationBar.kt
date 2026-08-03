@@ -72,7 +72,9 @@ fun FloatingToolbarNavigationBar(
                 .wrapContentWidth()
                 // Cast a soft drop shadow so the pill reads as a physical object above
                 // the content. Shadow shape must match the clip shape to render correctly.
-                .shadow(elevation = 8.dp, shape = CircleShape)
+                // 4dp keeps the lift while cutting the per-frame re-rasterization (the capsule
+                // re-measures every frame the active pill's width animates) ~4x vs 8dp.
+                .shadow(elevation = 4.dp, shape = CircleShape)
                 // Force a fully-rounded Pill / Capsule silhouette.
                 .clip(CircleShape),
             shape = CircleShape,

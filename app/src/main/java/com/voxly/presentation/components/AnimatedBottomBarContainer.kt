@@ -29,8 +29,9 @@ import androidx.compose.ui.unit.dp
  * The hide/show decision is read from [BottomBarVisibilityController.isVisible] via the
  * [LocalBottomBarVisibilityController] provided by [ProvideBottomBarVisibilityController].
  *
- * Timing follows the M3 spec for bottom app bar (≈ 250 ms) but uses a slightly faster
- * 200 ms shrink so the user feels an immediate response when they start scrolling.
+ * Timing is kept short (120 ms): the slot collapse re-lays out the whole Scaffold content, so a
+ * long shrink compounds with the page transition that triggers it. 120 ms still reads as a
+ * responsive hide while minimizing the re-layout jank window.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -47,10 +48,10 @@ fun AnimatedBottomBarContainer(
     AnimatedVisibility(
         visible = isVisible,
         modifier = modifier.fillMaxWidth(),
-        enter = fadeIn(animationSpec = tween(durationMillis = 200)) +
-            expandVertically(animationSpec = tween(durationMillis = 200)),
-        exit = fadeOut(animationSpec = tween(durationMillis = 200)) +
-            shrinkVertically(animationSpec = tween(durationMillis = 200))
+        enter = fadeIn(animationSpec = tween(durationMillis = 120)) +
+            expandVertically(animationSpec = tween(durationMillis = 120)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 120)) +
+            shrinkVertically(animationSpec = tween(durationMillis = 120))
     ) {
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
             content()

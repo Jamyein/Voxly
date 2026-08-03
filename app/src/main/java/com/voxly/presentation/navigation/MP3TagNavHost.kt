@@ -2,6 +2,7 @@ package com.voxly.presentation.navigation
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
@@ -56,14 +57,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.metadata
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
@@ -126,8 +131,8 @@ private fun containerTransformMetadata(): Map<String, Any> {
     val exit = ExpressiveAnimations.containerTransformSharedElementExit()
     val popEnter = ExpressiveAnimations.containerTransformSharedElementPopEnter()
     val popExit = ExpressiveAnimations.containerTransformSharedElementPopExit()
-    val predictiveBackEnter = ExpressiveAnimations.containerTransformSharedElementPredictiveBackEnter()
-    val predictiveBackExit = ExpressiveAnimations.containerTransformSharedElementPredictiveBackExit()
+    val predictiveBackEnter = ExpressiveAnimations.containerTransformPredictiveBackEnter()
+    val predictiveBackExit = ExpressiveAnimations.containerTransformPredictiveBackExit()
     return metadata {
         put(NavDisplay.TransitionKey) { enter togetherWith exit }
         put(NavDisplay.PopTransitionKey) { popEnter togetherWith popExit }
@@ -150,6 +155,24 @@ private fun sharedAxisXMetadata(): Map<String, Any> {
     }
 }
 
+/**
+ * Transition for top-level tab switches (Files / Albums / Artists / Settings): a non-directional
+ * fade + scale, since tabs have no horizontal navigation semantics. Replaces NavDisplay's default
+ * 700ms tween fade so tab switches use the same spring language as every other page transition.
+ */
+@Composable
+private fun fadePageMetadata(): Map<String, Any> {
+    val enter = ExpressiveAnimations.fadePageEnter()
+    val exit = ExpressiveAnimations.fadePageExit()
+    val predictiveBackEnter = ExpressiveAnimations.containerTransformPredictiveBackEnter()
+    val predictiveBackExit = ExpressiveAnimations.containerTransformPredictiveBackExit()
+    return metadata {
+        put(NavDisplay.TransitionKey) { enter togetherWith exit }
+        put(NavDisplay.PopTransitionKey) { enter togetherWith exit }
+        put(NavDisplay.PredictivePopTransitionKey) { predictiveBackEnter togetherWith predictiveBackExit }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -160,6 +183,44 @@ private fun <T : Any> rememberListDetailSceneStrategy(): androidx.navigation3.sc
             .copy(horizontalPartitionSpacerSize = 0.dp)
     }
     return rememberListDetailSceneStrategy<T>(directive = directive)
+}
+
+/**
+ * Blocks pointer input on NavEntries whose scene is animating out, so taps can't land on a page
+ * that's visually gone. NavDisplay keeps the outgoing scene composed (and hit-testable) for the
+ * whole transition and Compose hit-testing ignores alpha/scale, so without this, taps during a push
+ * fall through the new screen's empty areas onto the list beneath, and during a pop the invisible
+ * outgoing screen (rendered on top) swallows every tap. AnimatedContent gives each entering/exiting
+ * content its own AnimatedVisibilityScope; the exiting content's EnterExitState targets PostExit
+ * while the entering/settled content targets Visible, so we consume every pointer event (Initial
+ * pass) on the wrapper only while it is exiting — the incoming screen stays interactive the moment
+ * it appears.
+ */
+@Composable
+private fun transitionInputBlocker(): NavEntryDecorator<NavKey> = remember {
+    NavEntryDecorator<NavKey>(
+        decorate = @Composable { entry ->
+            val exiting =
+                LocalNavAnimatedContentScope.current.transition.targetState != EnterExitState.Visible
+            val blockModifier =
+                if (exiting) {
+                    // Only install the consuming pointer node while exiting — an idle pointerInput
+                    // on every entry root makes the ComposeView report edge touches as handled,
+                    // which can suppress the system's first predictive-back gesture.
+                    Modifier.pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent(PointerEventPass.Initial)
+                                    .changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+                } else {
+                    Modifier
+                }
+            Box(modifier = blockModifier) { entry.Content() }
+        }
+    )
 }
 
 @OptIn(
@@ -469,9 +530,13 @@ private fun MP3TagNavDisplay(
 ) {
     NavDisplay(
         backStack = topLevelBackStack.backStack,
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator(),
+            transitionInputBlocker()
+        ),
         onBack = { topLevelBackStack.removeLast() },
         entryProvider = entryProvider<NavKey> {
-            entry<FileBrowser> {
+            entry<FileBrowser>(metadata = fadePageMetadata()) {
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 FileBrowserAdaptiveScreen(
                     viewModel = libraryViewModel,
@@ -494,7 +559,7 @@ private fun MP3TagNavDisplay(
                 )
             }
 
-            entry<Albums> {
+            entry<Albums>(metadata = fadePageMetadata()) {
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 AlbumAdaptiveScreen(
                     onNavigateToAlbumDetail = { albumGroup ->
@@ -510,7 +575,7 @@ private fun MP3TagNavDisplay(
             }
 
             @OptIn(ExperimentalMaterial3Api::class)
-            entry<Artists> {
+            entry<Artists>(metadata = fadePageMetadata()) {
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 val artistViewModel: ArtistViewModel = hiltViewModel()
                 var showSearchSheet by remember { mutableStateOf(false) }
@@ -540,7 +605,7 @@ private fun MP3TagNavDisplay(
                 )
             }
 
-            entry<Settings> {
+            entry<Settings>(metadata = fadePageMetadata()) {
                 SettingsEntry(topLevelBackStack, LocalContext.current)
             }
 

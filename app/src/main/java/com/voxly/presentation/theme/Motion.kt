@@ -10,6 +10,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -60,6 +61,17 @@ private val PredictiveBackTweenSlide = tween<IntOffset>(
 )
 
 /**
+ * Page-level fade spring: critically damped so alpha never overshoots (a bouncy spring would make
+ * fade-out rebound and flicker), same stiffness as the spatial spring so the fade and the
+ * scale/slide converge together — one coherent motion instead of a fast fade followed by a
+ * lingering slide.
+ */
+private val PageFadeSpring = spring<Float>(
+    dampingRatio = 1f,
+    stiffness = 200f,
+)
+
+/**
  * Prebuilt transitions for Navigation3 and [AnimatedVisibility].
  *
  * Getters are `@Composable` so they read the active [MotionScheme] and cache the result per
@@ -74,7 +86,7 @@ object ExpressiveAnimations {
     fun containerTransformSharedElementEnter(): EnterTransition {
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
-            fadeIn(animationSpec = scheme.slowEffectsSpec()) +
+            fadeIn(animationSpec = PageFadeSpring) +
                 scaleIn(initialScale = 0.97f, animationSpec = scheme.slowSpatialSpec())
         }
     }
@@ -83,7 +95,7 @@ object ExpressiveAnimations {
     fun containerTransformSharedElementExit(): ExitTransition {
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
-            fadeOut(animationSpec = scheme.slowEffectsSpec()) +
+            fadeOut(animationSpec = PageFadeSpring) +
                 scaleOut(targetScale = 0.97f, animationSpec = scheme.slowSpatialSpec())
         }
     }
@@ -93,7 +105,7 @@ object ExpressiveAnimations {
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             scaleIn(initialScale = 0.97f, animationSpec = scheme.slowSpatialSpec()) +
-                fadeIn(animationSpec = scheme.slowEffectsSpec())
+                fadeIn(animationSpec = PageFadeSpring)
         }
     }
 
@@ -101,18 +113,10 @@ object ExpressiveAnimations {
     fun containerTransformSharedElementPopExit(): ExitTransition {
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
-            fadeOut(animationSpec = scheme.slowEffectsSpec()) +
+            fadeOut(animationSpec = PageFadeSpring) +
                 scaleOut(targetScale = 0.97f, animationSpec = scheme.slowSpatialSpec())
         }
     }
-
-    @Composable
-    fun containerTransformSharedElementPredictiveBackEnter(): EnterTransition =
-        fadeIn(animationSpec = PredictiveBackTween)
-
-    @Composable
-    fun containerTransformSharedElementPredictiveBackExit(): ExitTransition =
-        fadeOut(animationSpec = PredictiveBackTween)
 
     // ===== Container Transform with predictive back — slide + scale + fade, gesture tween =====
 
@@ -149,7 +153,7 @@ object ExpressiveAnimations {
             slideInHorizontally(
                 initialOffsetX = { it },
                 animationSpec = scheme.slowSpatialSpec(),
-            ) + fadeIn(animationSpec = scheme.slowEffectsSpec())
+            ) + fadeIn(animationSpec = PageFadeSpring)
         }
     }
 
@@ -160,7 +164,7 @@ object ExpressiveAnimations {
             slideOutHorizontally(
                 targetOffsetX = { -it },
                 animationSpec = scheme.slowSpatialSpec(),
-            ) + fadeOut(animationSpec = scheme.slowEffectsSpec())
+            ) + fadeOut(animationSpec = PageFadeSpring)
         }
     }
 
@@ -171,7 +175,7 @@ object ExpressiveAnimations {
             slideInHorizontally(
                 initialOffsetX = { -it },
                 animationSpec = scheme.slowSpatialSpec(),
-            ) + fadeIn(animationSpec = scheme.slowEffectsSpec())
+            ) + fadeIn(animationSpec = PageFadeSpring)
         }
     }
 
@@ -182,7 +186,27 @@ object ExpressiveAnimations {
             slideOutHorizontally(
                 targetOffsetX = { it },
                 animationSpec = scheme.slowSpatialSpec(),
-            ) + fadeOut(animationSpec = scheme.slowEffectsSpec())
+            ) + fadeOut(animationSpec = PageFadeSpring)
+        }
+    }
+
+    // ===== Fade page — top-level tab switches (no directional semantics, unlike shared axis) =====
+
+    @Composable
+    fun fadePageEnter(): EnterTransition {
+        val scheme = MaterialTheme.motionScheme
+        return remember(scheme) {
+            fadeIn(animationSpec = PageFadeSpring) +
+                scaleIn(initialScale = 0.98f, animationSpec = scheme.slowSpatialSpec())
+        }
+    }
+
+    @Composable
+    fun fadePageExit(): ExitTransition {
+        val scheme = MaterialTheme.motionScheme
+        return remember(scheme) {
+            fadeOut(animationSpec = PageFadeSpring) +
+                scaleOut(targetScale = 0.98f, animationSpec = scheme.slowSpatialSpec())
         }
     }
 

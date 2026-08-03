@@ -106,7 +106,11 @@ fun AlbumArtSection(
                         }
                         .clip(shape)
                         .blur(
-                            radius = 44.dp,
+                            // Full-screen Gaussian blur re-rasterizes on every layer invalidation
+                            // (album-art load, layout change) and cost grows with radius — 44dp on a
+                            // matchParentSize layer causes frame spikes right as the editor appears.
+                            // 16dp keeps the soft backdrop while cutting the kernel cost ~7x.
+                            radius = 16.dp,
                             edgeTreatment = BlurredEdgeTreatment.Unbounded
                         ),
                     contentScale = ContentScale.Crop

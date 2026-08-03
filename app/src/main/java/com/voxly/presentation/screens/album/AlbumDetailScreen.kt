@@ -238,7 +238,7 @@ fun AlbumDetailScreen(
                             }
                                 .size(240.dp)
                                 .aspectRatio(1f)
-                                .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
+                                .shadow(8.dp, shape = MaterialTheme.shapes.extraLarge)
                                 .clip(MaterialTheme.shapes.extraLarge)
                         ) {
                             AlbumArtImage(
@@ -249,7 +249,11 @@ fun AlbumDetailScreen(
                                 size = 240.dp,
                                 modifier = Modifier.fillMaxSize(),
                                 preResolvedUri = quickCoverUri,
-                                clipShape = MaterialTheme.shapes.extraLarge
+                                clipShape = MaterialTheme.shapes.extraLarge,
+                                // The shared memory cache already hands back the list page's decoded
+                                // bitmap on the first frame — a crossfade on top of the shared-element
+                                // bounds morph is just a second simultaneous animation (frame cost).
+                                crossfade = false
                             )
                         }
 

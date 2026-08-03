@@ -1,11 +1,6 @@
 package com.voxly.presentation.screens.metadata
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -146,18 +141,9 @@ fun ReplayGainSection(
                 )
             }
 
-            // Expanded content — animated expand/collapse on the motion scheme, consistent
-            // with the shared ReplayGainSection component.
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically(
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                ) + fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
-                exit = shrinkVertically(
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
-                ) + fadeOut(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec())
-            ) {
-                Spacer(modifier = Modifier.height(12.dp))
+            // Expanded content
+            if (expanded) {
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Show error if present
                 error?.let { scanError ->
@@ -184,7 +170,7 @@ fun ReplayGainSection(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
 
                 when {
@@ -228,7 +214,7 @@ fun ReplayGainSection(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         // Action buttons
                         Row(
@@ -269,7 +255,7 @@ fun ReplayGainSection(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
                             onClick = onScan,
@@ -301,7 +287,7 @@ fun ReplayGainRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(

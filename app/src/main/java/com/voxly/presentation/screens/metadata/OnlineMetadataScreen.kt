@@ -1,6 +1,5 @@
 package com.voxly.presentation.screens.metadata
 
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -165,7 +164,6 @@ fun OnlineMetadataScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(16.dp)
-                .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {
             when (val state = uiState) {
                 is OnlineMetadataUiState.Searching -> LoadingBox()

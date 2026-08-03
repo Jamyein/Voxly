@@ -183,8 +183,12 @@ private fun EditHistoryItem(
 
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = expandVertically(),
-                exit = shrinkVertically()
+                enter = expandVertically(
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                ),
+                exit = shrinkVertically(
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                )
             ) {
                 Column(modifier = Modifier.padding(top = 12.dp)) {
                     changedFields.forEach { (field, pair) ->
