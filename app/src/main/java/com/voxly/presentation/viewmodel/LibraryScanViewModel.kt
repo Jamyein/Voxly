@@ -70,16 +70,11 @@ class LibraryScanViewModel @Inject constructor(
         private const val EVENT_MERGE_WINDOW_MS = 400L
     }
 
-    // allAudios reads directly from the Room-backed cache (cachedAudioFilesStateFlow)
-    // instead of the album-artist aggregator. Files without album/artist metadata are
-    // now visible in the Files page — previously they were filtered out by the aggregator.
-    // Albums / Artists continue to consume the aggregator's derived streams below.
-    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.cachedAudioFilesStateFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = emptyList()
-        )
+    // allAudios reads the shared filtered library (filteredAllAudios) so the
+    // Files page respects whitelist/blacklist/min-duration settings exactly like
+    // Albums/Artists. Files without album/artist metadata remain visible here —
+    // they are only grouped out of the album-artist aggregator.
+    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAllAudios
 
     val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
         .stateIn(
@@ -137,10 +132,10 @@ class LibraryScanViewModel @Inject constructor(
     private val _selectedDirectories = MutableStateFlow<List<SelectedDirectory>>(emptyList())
     val selectedDirectories: StateFlow<List<SelectedDirectory>> = _selectedDirectories.asStateFlow()
 
-    // Directory-scoped files derived from the full cache flow, grouped by
-    // selected directory. Stays in sync automatically whenever the cache
-    // (allAudios — Room-backed) or the selection changes; no manual
-    // bookkeeping on scan. Every selected dir appears (possibly empty list).
+    // Directory-scoped files derived from the filtered library flow, grouped by
+    // selected directory. Stays in sync automatically whenever the filtered
+    // library (allAudios) or the selection changes; no manual bookkeeping on
+    // scan. Every selected dir appears (possibly empty list).
     val directoryFiles: StateFlow<Map<String, List<AudioFile>>> = combine(
         allAudios,
         selectedDirectories

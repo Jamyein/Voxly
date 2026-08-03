@@ -8,35 +8,22 @@ sealed class CacheChange {
     data class FileUpdated(
         val filePath: String,
         val albumKey: String?,
-        val artistKey: String?,
         override val timestamp: Long = System.currentTimeMillis()
     ) : CacheChange()
 
     data class FileDeleted(
         val filePath: String,
         val albumKey: String?,
-        val artistKey: String?,
         override val timestamp: Long = System.currentTimeMillis()
     ) : CacheChange()
 
     data class FilesBatchUpdated(
         val filePaths: List<String>,
         val albumKeys: Set<String>,
-        val artistKeys: Set<String>,
         override val timestamp: Long = System.currentTimeMillis()
     ) : CacheChange()
 
     data class FullRefresh(
-        override val timestamp: Long = System.currentTimeMillis()
-    ) : CacheChange()
-
-    data class AlbumMetadataChanged(
-        val albumKey: String,
-        override val timestamp: Long = System.currentTimeMillis()
-    ) : CacheChange()
-
-    data class ArtistMetadataChanged(
-        val artistKey: String,
         override val timestamp: Long = System.currentTimeMillis()
     ) : CacheChange()
 }
@@ -67,20 +54,24 @@ object CacheChangeKeys {
         }
     }
 
+    /**
+     * Artist group keys for a file — mirrors the full-build split in
+     * AlbumArtistAggregator so incremental single-file updates produce exactly
+     * the same groups as a rebuild. Keys are always name-based: split by
+     * [separators] when provided, otherwise the raw artist name. The MediaStore
+     * artist id is never a group key (it only refines the display name).
+     */
     fun extractArtistKeysWithSeparators(file: AudioFile, separators: Set<String>): List<String> {
-        val artistKey = extractArtistKey(file) ?: return emptyList()
-        if (artistKey.startsWith("id:")) {
-            return listOf(artistKey)
-        }
+        val artistName = file.metadata.artist?.takeIf { it.isNotBlank() } ?: return emptyList()
 
         if (separators.isEmpty()) {
-            return listOf(artistKey)
+            return listOf(artistName)
         }
 
         val regex = separators.sortedByDescending { it.length }
             .joinToString("|") { Regex.escape(it) }
 
-        return artistKey.split(Regex(regex))
+        return artistName.split(Regex(regex))
             .map { it.trim() }
             .filter { it.isNotBlank() }
     }

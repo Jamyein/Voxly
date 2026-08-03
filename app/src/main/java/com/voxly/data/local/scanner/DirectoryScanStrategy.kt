@@ -1,15 +1,11 @@
 package com.voxly.data.local.scanner
 
-import android.net.Uri
-import androidx.documentfile.provider.DocumentFile
 import com.voxly.core.util.SortUtil
 import com.voxly.data.local.MusicLibraryCache
-import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -19,12 +15,10 @@ import javax.inject.Inject
 class DirectoryScanStrategy @Inject constructor(
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val libraryCache: MusicLibraryCache,
-    private val settingsDataStore: SettingsDataStore,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val fileProcessor: FileProcessor,
     private val fastScanProcessor: FastScanProcessor,
-    private val safWriteAccessService: SafWriteAccessService,
-    private val filterEngine: FilterEngine
+    private val safWriteAccessService: SafWriteAccessService
 ) : ScanStrategy {
     companion object {
         private const val TAG = "DirectoryScanStrategy"
@@ -34,8 +28,7 @@ class DirectoryScanStrategy @Inject constructor(
     suspend fun scanDirectories(
         directoryPaths: List<String>,
         incremental: Boolean,
-        forceRefresh: Boolean,
-        filterSettings: FilterEngine.FilterSettings
+        forceRefresh: Boolean
     ): List<AudioFile> {
         val normalizedDirs = directoryPaths
             .map { it.trimEnd('/', '\\') }
@@ -47,26 +40,24 @@ class DirectoryScanStrategy @Inject constructor(
         // forceRefresh forces a full re-read; otherwise incremental skips
         // unchanged files. A non-incremental, non-forced request is a full scan.
         return if (incremental && !forceRefresh) {
-            scanDirectoriesIncremental(normalizedDirs, filterSettings)
+            scanDirectoriesIncremental(normalizedDirs)
         } else {
-            scanDirectoriesFull(normalizedDirs, filterSettings)
+            scanDirectoriesFull(normalizedDirs)
         }
     }
 
     private suspend fun scanDirectoriesFull(
-        directoryPaths: List<String>,
-        filterSettings: FilterEngine.FilterSettings
+        directoryPaths: List<String>
     ): List<AudioFile> = withContext(Dispatchers.IO) {
         Timber.tag("Voxly").i("DirectoryScanStrategy scanDirectoriesFull: dirs=${directoryPaths.size}")
         directoryPaths.filter { kotlinx.coroutines.currentCoroutineContext().isActive }.flatMap { dir ->
-            scanDirectoryInternal(dir, filterSettings)
+            scanDirectoryInternal(dir)
         }.distinctBy { it.path }
             .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }
 
     private suspend fun scanDirectoriesIncremental(
-        directoryPaths: List<String>,
-        filterSettings: FilterEngine.FilterSettings
+        directoryPaths: List<String>
     ): List<AudioFile> = withContext(Dispatchers.IO) {
         Timber.tag("Voxly").i("DirectoryScanStrategy scanDirectoriesIncremental: dirs=${directoryPaths.size}")
         val currentFiles = mutableListOf<Pair<String, Long>>()
@@ -114,29 +105,21 @@ class DirectoryScanStrategy @Inject constructor(
         val allFiles = (retainedFiles + updatedFiles + newFiles)
             .distinctBy { it.path }
 
-        val filteredFiles = filterEngine.applyFilters(allFiles, filterSettings)
-
         if (updatedFiles.isNotEmpty() || newFiles.isNotEmpty()) {
-            libraryCache.updateCache(filteredFiles)
+            libraryCache.updateCache(allFiles)
         }
 
-        filteredFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
+        allFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }
 
     private suspend fun scanDirectoryInternal(
-        directoryPath: String,
-        filterSettings: FilterEngine.FilterSettings
+        directoryPath: String
     ): List<AudioFile> = withContext(Dispatchers.IO) {
         val normalizedDir = directoryPath.trimEnd('/', '\\')
 
-        val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
-        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
-
         val relativeDir = mediaStoreDataSource.getRelativePathFromAbsolute(normalizedDir)
         val audioFiles = if (relativeDir != null) {
-            var storeFiles = mediaStoreDataSource.queryFromDirectory(relativeDir, minDurationEnabled, minDurationMs)
-            storeFiles = filterEngine.applyFilters(storeFiles, filterSettings)
-
+            val storeFiles = mediaStoreDataSource.queryFromDirectory(relativeDir)
             fastScanProcessor.enrichAll(storeFiles)
         } else {
             emptyList()
@@ -164,7 +147,7 @@ class DirectoryScanStrategy @Inject constructor(
         }
     }
 
-    override suspend fun scan(filterSettings: FilterEngine.FilterSettings): List<AudioFile> {
+    override suspend fun scan(): List<AudioFile> {
         throw UnsupportedOperationException("Use scanDirectories() instead")
     }
 }

@@ -71,10 +71,11 @@ class LibraryRepositoryImpl @Inject constructor(
     override val scanError: SharedFlow<String> = libraryDataHolder.scanError
 
     // Data flows delegate to the scanner.
-    // allAudios now reads the raw Room-backed StateFlow so callers see EVERY
-    // cached audio file (including those without an album key). Album /
-    // artist flows continue to come from the aggregator.
-    override val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.cachedAudioFilesStateFlow
+    // allAudios reads the shared filtered library (filteredAllAudios) so callers
+    // see exactly what the library displays — whitelist/blacklist/min-duration
+    // applied, including files without an album key. Album / artist flows
+    // continue to come from the aggregator.
+    override val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAllAudios
     override val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
     override val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
     override val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = audioFileScanner.albumDiff

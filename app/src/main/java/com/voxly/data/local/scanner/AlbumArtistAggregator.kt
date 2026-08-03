@@ -18,13 +18,16 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
@@ -91,12 +94,6 @@ class AlbumArtistAggregator @Inject constructor(
     val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = _albumsBySort.asStateFlow()
 
     private data class AggregationConfig(
-        val whitelistEnabled: Boolean,
-        val blacklistEnabled: Boolean,
-        val minDurationEnabled: Boolean,
-        val minDurationMs: Long,
-        val whitelistPaths: List<String>,
-        val blacklistPaths: List<String>,
         val separatorEnabled: Boolean,
         val separators: Set<String>
     )
@@ -105,9 +102,7 @@ class AlbumArtistAggregator @Inject constructor(
         val whitelistEnabled: Boolean,
         val blacklistEnabled: Boolean,
         val minDurationEnabled: Boolean,
-        val minDurationMs: Long,
-        val whitelistPaths: List<String>,
-        val blacklistPaths: List<String>
+        val minDurationMs: Long
     )
 
     private val _albumsMap = MutableStateFlow<Map<String, AlbumGroup>>(emptyMap())
@@ -117,8 +112,6 @@ class AlbumArtistAggregator @Inject constructor(
     // ConcurrentHashMap because buildAlbumsFromFiles may run on a different coroutine
     // than incrementalUpdateFile (e.g. via direct init rebuild vs changeFlow collect).
     private val _fileAlbumMap = java.util.concurrent.ConcurrentHashMap<String, String>()
-    // Reverse index: filePath -> artistKey for O(1) lookup when metadata changes
-    private val _fileArtistMap = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private val baseFilterConfig = combine(
         settingsDataStore.whitelistEnabled,
@@ -130,35 +123,62 @@ class AlbumArtistAggregator @Inject constructor(
             whitelistEnabled = whitelistEnabled,
             blacklistEnabled = blacklistEnabled,
             minDurationEnabled = minDurationEnabled,
-            minDurationMs = minDurationMs.toLong(),
-            whitelistPaths = emptyList(),
-            blacklistPaths = emptyList()
+            minDurationMs = minDurationMs.toLong()
         )
     }
 
-    private val filterConfig = combine(
+    /**
+     * Live whitelist/blacklist/min-duration settings — the single read-stage
+     * authority for what the library displays. Consumed by [filteredAllAudios].
+     */
+    val filterSettings: StateFlow<FilterEngine.FilterSettings> = combine(
         baseFilterConfig,
         whitelistRepository.getValidWhitelistPaths().distinctUntilChanged(),
         whitelistRepository.getValidBlacklistPaths().distinctUntilChanged()
     ) { baseConfig, whitelistPaths, blacklistPaths ->
-        baseConfig.copy(
+        FilterEngine.FilterSettings(
+            whitelistEnabled = baseConfig.whitelistEnabled && whitelistPaths.isNotEmpty(),
+            blacklistEnabled = baseConfig.blacklistEnabled && blacklistPaths.isNotEmpty(),
+            minDurationEnabled = baseConfig.minDurationEnabled,
             whitelistPaths = whitelistPaths,
-            blacklistPaths = blacklistPaths
+            blacklistPaths = blacklistPaths,
+            minDurationMs = baseConfig.minDurationMs
         )
-    }
+    }.stateIn(
+        scope = applicationScope,
+        started = SharingStarted.Eagerly,
+        initialValue = FilterEngine.FilterSettings(
+            whitelistEnabled = false,
+            blacklistEnabled = false,
+            minDurationEnabled = false,
+            whitelistPaths = emptyList(),
+            blacklistPaths = emptyList(),
+            minDurationMs = 0L
+        )
+    )
+
+    /**
+     * The single filtered library: every audio file in the raw Room cache,
+     * filtered by the current whitelist/blacklist/min-duration settings.
+     * Files page, Songs, search, and album/artist aggregation all consume this
+     * one flow, so filter toggles take effect instantly and everywhere.
+     */
+    val filteredAllAudios: StateFlow<List<AudioFile>> = combine(
+        libraryCache.getCachedAudioFiles(),
+        filterSettings
+    ) { files, settings ->
+        filterEngine.applyFilters(files, settings)
+    }.stateIn(
+        scope = applicationScope,
+        started = SharingStarted.Eagerly,
+        initialValue = emptyList()
+    )
 
     private val aggregationConfig = combine(
-        filterConfig,
         settingsDataStore.artistSeparatorEnabled,
         settingsDataStore.artistSeparatorsSet
-    ) { filterConfig, separatorEnabled, separators ->
+    ) { separatorEnabled, separators ->
         AggregationConfig(
-            whitelistEnabled = filterConfig.whitelistEnabled,
-            blacklistEnabled = filterConfig.blacklistEnabled,
-            minDurationEnabled = filterConfig.minDurationEnabled,
-            minDurationMs = filterConfig.minDurationMs,
-            whitelistPaths = filterConfig.whitelistPaths,
-            blacklistPaths = filterConfig.blacklistPaths,
             separatorEnabled = separatorEnabled,
             separators = separators
         )
@@ -204,61 +224,78 @@ class AlbumArtistAggregator @Inject constructor(
                     is CacheChange.FullRefresh -> {
                         Timber.d(TAG, "FullRefresh received, re-building aggregates")
                         val config = aggregationConfig.first()
-                        val files = libraryCache.getCachedAudioFilesOnce()
-                        buildAggregatesFromFiles(files, config)
+                        buildAggregatesFromFiles(filteredAllAudios.value, config)
                     }
                     is CacheChange.FileUpdated -> {
-                        Timber.d(TAG, "FileUpdated: ${change.filePath}, albumKey=${change.albumKey}, artistKey=${change.artistKey}")
-                        incrementalUpdateFile(change.filePath, change.albumKey, change.artistKey)
+                        Timber.d(TAG, "FileUpdated: ${change.filePath}, albumKey=${change.albumKey}")
+                        incrementalUpdateFile(change.filePath, change.albumKey)
                     }
                     is CacheChange.FileDeleted -> {
-                        Timber.d(TAG, "FileDeleted: ${change.filePath}, albumKey=${change.albumKey}, artistKey=${change.artistKey}")
-                        removeFileFromAggregates(change.filePath, change.albumKey, change.artistKey)
+                        Timber.d(TAG, "FileDeleted: ${change.filePath}, albumKey=${change.albumKey}")
+                        removeFileFromAggregates(change.filePath, change.albumKey)
                     }
                     is CacheChange.FilesBatchUpdated -> {
                         val totalCached = libraryCache.getCachedFileCount()
                         val changedSize = change.filePaths.size
                         val isLargeDiff = totalCached > 0 &&
                             changedSize.toDouble() / totalCached > LARGE_DIFF_RATIO
-                        val keysMissing = change.albumKeys.isEmpty() || change.artistKeys.isEmpty()
+                        val keysMissing = change.albumKeys.isEmpty()
                         if (isLargeDiff || keysMissing) {
                             Timber.d(TAG, "FilesBatchUpdated: full rebuild (changed=$changedSize, total=$totalCached, isLargeDiff=$isLargeDiff, keysMissing=$keysMissing)")
                             val config = aggregationConfig.first()
-                            val files = libraryCache.getCachedAudioFilesOnce()
-                            buildAggregatesFromFiles(files, config)
+                            buildAggregatesFromFiles(filteredAllAudios.value, config)
                         } else {
-                            Timber.d(TAG, "FilesBatchUpdated: incremental rebuild (albums=${change.albumKeys.size}, artists=${change.artistKeys.size}, files=$changedSize)")
-                            // Fetch + filter once, reuse across all per-key rebuilds.
-                            // Without hoisting, rebuildAlbum would call
-                            // getCachedAudioFilesOnce() once per albumKey.
-                            val allFiles = libraryCache.getCachedAudioFilesOnce()
+                            // The shared filtered flow is already filtered with the
+                            // current settings — reuse it across all per-key rebuilds.
+                            val filtered = filteredAllAudios.value
                             val config = aggregationConfig.first()
-                            val filtered = filterEngine.applyFilters(
-                                allFiles,
-                                FilterEngine.FilterSettings(
-                                    whitelistEnabled = config.whitelistEnabled,
-                                    blacklistEnabled = config.blacklistEnabled,
-                                    minDurationEnabled = config.minDurationEnabled,
-                                    whitelistPaths = config.whitelistPaths,
-                                    blacklistPaths = config.blacklistPaths,
-                                    minDurationMs = config.minDurationMs
-                                )
-                            )
+                            // The event's artistKeys use extractArtistKey (raw name /
+                            // id), which never matches the split-name groups — derive
+                            // the affected artist keys from the changed file paths with
+                            // the same name-based key logic as the full build.
+                            val affectedArtistKeys = change.filePaths
+                                .mapNotNull { path ->
+                                    libraryCache.getCachedFile(path)?.let { file ->
+                                        CacheChangeKeys.extractArtistKeysWithSeparators(
+                                            file,
+                                            if (config.separatorEnabled) config.separators else emptySet()
+                                        )
+                                    }
+                                }
+                                .flatten()
+                                .toSet()
+                            Timber.d(TAG, "FilesBatchUpdated: incremental rebuild (albums=${change.albumKeys.size}, artists=$affectedArtistKeys, files=$changedSize)")
                             aggregatorMutex.withLock {
                                 change.albumKeys.forEach { albumKey -> applyFilteredToAlbum(albumKey, filtered) }
-                                change.artistKeys.forEach { artistKey -> rebuildArtist(artistKey) }
+                                affectedArtistKeys.forEach { artistKey -> applyFilteredToArtist(artistKey, filtered, config) }
                             }
                         }
                     }
-                    is CacheChange.AlbumMetadataChanged -> {
-                        Timber.d(TAG, "AlbumMetadataChanged: ${change.albumKey}")
-                        rebuildAlbum(change.albumKey)
-                    }
-                    is CacheChange.ArtistMetadataChanged -> {
-                        Timber.d(TAG, "ArtistMetadataChanged: ${change.artistKey}")
-                        rebuildArtist(change.artistKey)
-                    }
                 }
+            }
+        }
+
+        // Filter toggles (whitelist/blacklist/min-duration, including the
+        // threshold value) change the filtered library WITHOUT touching the
+        // cache, so no cache event fires. Rebuild from the shared filtered flow
+        // on every settings change. drop(1) skips the initial emission, which
+        // kickOffInitialBuild already handles.
+        applicationScope.launch(Dispatchers.Default) {
+            filterSettings.drop(1).collect {
+                Timber.d(TAG, "Filter settings changed, re-building aggregates")
+                val config = aggregationConfig.first()
+                buildAggregatesFromFiles(filteredAllAudios.value, config)
+            }
+        }
+
+        // Artist separator toggles/values change the artist grouping WITHOUT
+        // touching the cache, so no cache event fires. Rebuild artists from the
+        // shared filtered flow on every separator change. drop(1) skips the
+        // initial emission, which kickOffInitialBuild already handles.
+        applicationScope.launch(Dispatchers.Default) {
+            aggregationConfig.drop(1).collect { config ->
+                Timber.d(TAG, "Artist separator settings changed, re-building artists")
+                buildArtistsFromFiles(filteredAllAudios.value, config.separatorEnabled, config.separators)
             }
         }
     }
@@ -272,29 +309,39 @@ class AlbumArtistAggregator @Inject constructor(
      * the same and the work is wasted but not incorrect.
      */
     private suspend fun kickOffInitialBuild() {
-        val files = libraryCache.getCachedAudioFilesOnce()
-        if (files.isEmpty()) {
+        if (libraryCache.getCachedAudioFilesOnce().isEmpty()) {
             Timber.d(TAG, "kickOffInitialBuild: cache empty, waiting for FullRefresh event")
             return
         }
+        // Await the first real filtered emission (real cache data + real
+        // settings from DataStore) instead of reading filterSettings.value,
+        // which may still hold the initial no-filter value at startup.
         val config = aggregationConfig.first()
-        buildAggregatesFromFiles(files, config)
+        buildAggregatesFromFiles(filteredAllAudios.first { it.isNotEmpty() }, config)
     }
 
     private suspend fun incrementalUpdateFile(
         filePath: String,
-        albumKey: String?,
-        artistKey: String?
+        albumKey: String?
     ) {
+        // The shared filtered flow is authoritative: a single-file update whose
+        // path is currently filtered out (blacklisted, too short, outside the
+        // whitelist) must not re-enter an album/artist.
+        if (filteredAllAudios.value.none { it.path == filePath }) return
+
         val config = aggregationConfig.first()
         val file = libraryCache.getCachedFile(filePath) ?: return
 
         val newAlbumKey = CacheChangeKeys.extractAlbumKey(file)
-        val newArtistKeys = CacheChangeKeys.extractArtistKeysWithSeparators(file, config.separators)
+        // Gate on separatorEnabled so a disabled toggle never splits — matches
+        // buildArtistsFromFiles (which only splits when separatorEnabled).
+        val newArtistKeys = CacheChangeKeys.extractArtistKeysWithSeparators(
+            file,
+            if (config.separatorEnabled) config.separators else emptySet()
+        )
 
-        // Use reverse index to find old album/artist keys for O(1) lookup
+        // Album: reverse index stays (a file belongs to at most one album).
         val oldAlbumKey = _fileAlbumMap[filePath]
-        val oldArtistKey = _fileArtistMap[filePath]
 
         // Remove from old album if key changed
         if (oldAlbumKey != null && oldAlbumKey != newAlbumKey) {
@@ -310,17 +357,19 @@ class AlbumArtistAggregator @Inject constructor(
             }
         }
 
-        // Remove from old artist if key changed
-        if (oldArtistKey != null && !newArtistKeys.contains(oldArtistKey)) {
-            removeFileFromArtist(filePath, oldArtistKey)
-        }
+        // Artists: no reverse index — reconcile by scanning the current groups
+        // for this path, so multi-artist files (split by separators) are always
+        // removed/added consistently with a full rebuild. Single-file events are
+        // rare, so the O(groups) scan is fine.
+        val oldArtistKeys = currentArtistKeysFor(filePath)
+        val newArtistKeySet = newArtistKeys.toSet()
 
-        // Add/update in new artists
+        (oldArtistKeys - newArtistKeySet).forEach { removeFileFromArtist(filePath, it) }
         for (key in newArtistKeys) {
-            if (key != oldArtistKey) {
-                addFileToArtist(file, key, config.separators)
+            if (key in oldArtistKeys) {
+                updateArtistIncremental(file, key, config.separatorEnabled)
             } else {
-                updateArtistIncremental(file, key, config.separators)
+                addFileToArtist(file, key, config.separatorEnabled)
             }
         }
 
@@ -401,12 +450,14 @@ class AlbumArtistAggregator @Inject constructor(
             )
         }
         _artistsMap.value = currentMap
-        
-        // Update reverse index
-        _fileArtistMap.remove(filePath)
     }
 
-    private suspend fun addFileToArtist(file: AudioFile, artistKey: String, separators: Set<String>) {
+    /** Artist group keys that currently contain [filePath]. Scans the live map
+     *  instead of a reverse index, so multi-artist membership is always exact. */
+    private fun currentArtistKeysFor(filePath: String): Set<String> =
+        _artistsMap.value.filterValues { group -> group.files.any { it.path == filePath } }.keys
+
+    private suspend fun addFileToArtist(file: AudioFile, artistKey: String, separatorEnabled: Boolean) {
         val currentMap = _artistsMap.value.toMutableMap()
         val existingArtist = currentMap[artistKey]
 
@@ -422,7 +473,7 @@ class AlbumArtistAggregator @Inject constructor(
         )
         val coverFile = sortedForCover.firstOrNull()
 
-        val displayName = resolveArtistDisplayName(artistKey, file)
+        val displayName = resolveArtistDisplayName(artistKey, file, separatorEnabled)
         currentMap[artistKey] = ArtistGroup(
             name = displayName,
             albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
@@ -430,9 +481,6 @@ class AlbumArtistAggregator @Inject constructor(
             coverPath = coverFile?.path
         )
         _artistsMap.value = currentMap
-        
-        // Update reverse index
-        _fileArtistMap[file.path] = artistKey
     }
 
     private suspend fun updateAlbumIncremental(file: AudioFile, albumKey: String) {
@@ -468,119 +516,68 @@ class AlbumArtistAggregator @Inject constructor(
     private suspend fun updateArtistIncremental(
         file: AudioFile,
         artistKey: String,
-        separators: Set<String>
+        separatorEnabled: Boolean
     ) {
         val currentMap = _artistsMap.value.toMutableMap()
-
-        val artistKeys = CacheChangeKeys.extractArtistKeysWithSeparators(file, separators)
-        for (key in artistKeys) {
-            val currentArtist = currentMap[key]
-            val newArtistFiles = if (currentArtist != null) {
-                currentArtist.files.filter { it.path != file.path } + file
-            } else {
-                listOf(file)
-            }
-
-            val sortedForCover = newArtistFiles.sortedWith(
-                compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    .thenBy { it.metadata.album }
-            )
-            val coverFile = sortedForCover.firstOrNull()
-
-            val displayName = resolveArtistDisplayName(key, file)
-            currentMap[key] = ArtistGroup(
-                name = displayName,
-                albums = newArtistFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
-                files = newArtistFiles.sortedBy { it.metadata.album }.toImmutableList(),
-                coverPath = coverFile?.path
-            )
-            
-            // Update reverse index
-            _fileArtistMap[file.path] = key
+        val currentArtist = currentMap[artistKey]
+        val newArtistFiles = if (currentArtist != null) {
+            currentArtist.files.filter { it.path != file.path } + file
+        } else {
+            listOf(file)
         }
 
+        val sortedForCover = newArtistFiles.sortedWith(
+            compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                .thenBy { it.metadata.album }
+        )
+        val coverFile = sortedForCover.firstOrNull()
+
+        currentMap[artistKey] = ArtistGroup(
+            name = resolveArtistDisplayName(artistKey, file, separatorEnabled),
+            albums = newArtistFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
+            files = newArtistFiles.sortedBy { it.metadata.album }.toImmutableList(),
+            coverPath = coverFile?.path
+        )
         _artistsMap.value = currentMap
     }
 
     private suspend fun removeFileFromAggregates(
         filePath: String,
-        albumKey: String?,
-        artistKey: String?
+        albumKey: String?
     ) {
-        val config = aggregationConfig.first()
-
         if (albumKey != null) {
             val currentMap = _albumsMap.value.toMutableMap()
-            val currentAlbum = currentMap[albumKey] ?: return
-            val newFiles = currentAlbum.files.filter { it.path != filePath }
-
-            if (newFiles.isEmpty()) {
-                currentMap.remove(albumKey)
-            } else {
-                val coverFile = newFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    ?: newFiles.firstOrNull()
-                val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
-
-                currentMap[albumKey] = currentAlbum.copy(
-                    files = newFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
-                    coverPath = coverFile?.path,
-                    year = albumYear
-                )
-            }
-
-            _albumsMap.value = currentMap
-            // Update reverse index
-            _fileAlbumMap.remove(filePath)
-        }
-
-        if (artistKey != null) {
-            val artistKeys = listOf(artistKey)
-            val currentMap = _artistsMap.value.toMutableMap()
-
-            for (key in artistKeys) {
-                val currentArtist = currentMap[key] ?: continue
-                val newFiles = currentArtist.files.filter { it.path != filePath }
+            val currentAlbum = currentMap[albumKey]
+            // Album group may be absent (e.g. already rebuilt by a full pass);
+            // that must not skip the artist removal below.
+            if (currentAlbum != null) {
+                val newFiles = currentAlbum.files.filter { it.path != filePath }
 
                 if (newFiles.isEmpty()) {
-                    currentMap.remove(key)
+                    currentMap.remove(albumKey)
                 } else {
-                    val sortedForCover = newFiles.sortedWith(
-                        compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                            .thenBy { it.metadata.album }
-                    )
-                    val coverFile = sortedForCover.firstOrNull()
+                    val coverFile = newFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                        ?: newFiles.firstOrNull()
+                    val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
 
-                currentMap[key] = currentArtist.copy(
-                    albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
-                    files = newFiles.sortedBy { it.metadata.album }.toImmutableList(),
-                    coverPath = coverFile?.path
+                    currentMap[albumKey] = currentAlbum.copy(
+                        files = newFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
+                        coverPath = coverFile?.path,
+                        year = albumYear
                     )
                 }
-            }
 
-            _artistsMap.value = currentMap
-            // Update reverse index
-            _fileArtistMap.remove(filePath)
+                _albumsMap.value = currentMap
+                // Update reverse index
+                _fileAlbumMap.remove(filePath)
+            }
         }
 
-        emitUpdatedLists()
-    }
+        // Remove the file from every artist group that currently contains it.
+        // The event's artistKey uses extractArtistKey (raw name / id), which
+        // never matches the split-name groups — scan the current groups instead.
+        currentArtistKeysFor(filePath).forEach { removeFileFromArtist(filePath, it) }
 
-    private suspend fun rebuildAlbum(albumKey: String) {
-        val allFiles = libraryCache.getCachedAudioFilesOnce()
-        val config = aggregationConfig.first()
-        val filtered = filterEngine.applyFilters(
-            allFiles,
-            FilterEngine.FilterSettings(
-                whitelistEnabled = config.whitelistEnabled,
-                blacklistEnabled = config.blacklistEnabled,
-                minDurationEnabled = config.minDurationEnabled,
-                whitelistPaths = config.whitelistPaths,
-                blacklistPaths = config.blacklistPaths,
-                minDurationMs = config.minDurationMs
-            )
-        )
-        applyFilteredToAlbum(albumKey, filtered)
         emitUpdatedLists()
     }
 
@@ -632,33 +629,47 @@ class AlbumArtistAggregator @Inject constructor(
         filesForAlbum.forEach { f -> _fileAlbumMap[f.path] = albumKey }
     }
 
-    private suspend fun rebuildArtist(artistKey: String) {
-        val config = aggregationConfig.first()
-
-        // Look up all files belonging to this artist via the artist_links table.
-        // artistKey is either "id:<long>" (from MediaStore artist id) or a raw artist name.
-        // The values returned by `getTrackIdsForArtist` are file paths (the
-        // `ArtistLinkEntity.trackId` column now stores `file.path` instead of
-        // the previous 32-bit `file.id.hashCode()` — see lesson.md #24 + #25).
-        val trackIds: List<String> = when {
-            artistKey.startsWith("id:") -> {
-                // For id: prefixed keys, the MediaStore id maps to the canonical artist name
-                // via the primary artist of each file. Fall back to scanning all files.
-                libraryCache.getCachedAudioFilesOnce()
-                    .filter { it.mediaStoreArtistId?.toString() == artistKey.removePrefix("id:") }
-                    .map { it.path }
+    /**
+     * Construct [ArtistGroup] for [artistKey] from a pre-fetched `filtered` list
+     * of all cached audio files, then write it to [_artistsMap]. Mirrors
+     * [applyFilteredToAlbum] and uses the same name-based key logic as the full
+     * build, so incremental batch artist updates stay consistent with a rebuild.
+     * Caller is responsible for [emitUpdatedLists] when batching across keys.
+     */
+    private suspend fun applyFilteredToArtist(
+        artistKey: String,
+        filtered: List<AudioFile>,
+        config: AggregationConfig
+    ) {
+        val filesForArtist = filtered.filter { file ->
+            CacheChangeKeys.extractArtistKeysWithSeparators(
+                file,
+                if (config.separatorEnabled) config.separators else emptySet()
+            ).contains(artistKey)
+        }
+        val currentMap = _artistsMap.value.toMutableMap()
+        if (filesForArtist.isEmpty()) {
+            if (currentMap.remove(artistKey) != null) {
+                _artistsMap.value = currentMap
             }
-            else -> libraryCache.getTrackIdsForArtist(artistKey).mapNotNull { path ->
-                libraryCache.getCachedAudioFilesOnce().firstOrNull { it.path == path }?.path
-            }
+            return
         }
 
-        if (trackIds.isEmpty()) return
+        val sortedForCover = filesForArtist.sortedWith(
+            compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                .thenBy { it.metadata.album }
+        )
+        val coverFile = sortedForCover.firstOrNull()
 
-        // Re-process each file so the artist group gets re-derived correctly
-        trackIds.forEach { path ->
-            incrementalUpdateFile(path, null, artistKey)
-        }
+        // Display name uses the last file's artist id, matching the full build's
+        // artistNameToId "last write wins" semantics.
+        currentMap[artistKey] = ArtistGroup(
+            name = resolveArtistDisplayName(artistKey, filesForArtist.last(), config.separatorEnabled),
+            albums = filesForArtist.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
+            files = filesForArtist.sortedBy { it.metadata.album }.toImmutableList(),
+            coverPath = coverFile?.path
+        )
+        _artistsMap.value = currentMap
     }
 
     private fun emitUpdatedLists() {
@@ -740,28 +751,18 @@ class AlbumArtistAggregator @Inject constructor(
     /** Same as [keyFor] but as extension for readability. */
     private fun AlbumGroup.key(): String = keyFor(this)
 
-/**
+    /**
      * Builds complete aggregates from audio files.
+     * [files] is expected to be the already-filtered library (filteredAllAudios).
      * Called on full refresh to rebuild all maps from scratch.
      */
     private suspend fun buildAggregatesFromFiles(
         files: List<AudioFile>,
         config: AggregationConfig
     ) = withContext(Dispatchers.Default) {
-        val filtered = filterEngine.applyFilters(
-            files,
-            FilterEngine.FilterSettings(
-                whitelistEnabled = config.whitelistEnabled,
-                blacklistEnabled = config.blacklistEnabled,
-                minDurationEnabled = config.minDurationEnabled,
-                whitelistPaths = config.whitelistPaths,
-                blacklistPaths = config.blacklistPaths,
-                minDurationMs = config.minDurationMs
-            )
-        )
-        buildAlbumsFromFiles(filtered)
+        buildAlbumsFromFiles(files)
         buildArtistsFromFiles(
-            files = filtered,
+            files = files,
             separatorEnabled = config.separatorEnabled,
             customSeparators = config.separators
         )
@@ -897,14 +898,6 @@ class AlbumArtistAggregator @Inject constructor(
         }.toMap()
 
         _artistsMap.value = artistsMap
-        
-        // Rebuild reverse index for artists
-        _fileArtistMap.clear()
-        artistsMap.forEach { (key, artist) ->
-            artist.files.forEach { file ->
-                _fileArtistMap[file.path] = key
-            }
-        }
         emitUpdatedLists()
     }
 
@@ -1000,16 +993,18 @@ class AlbumArtistAggregator @Inject constructor(
     }
 
     /**
-     * Resolve artist display name from an artist key.
-     * For "id:" prefixed keys, queries MediaStore to get the actual artist name.
-     * For other keys, returns the key as-is.
+     * Display name for an artist group key, mirroring buildArtistsFromFiles:
+     * when separators are enabled the (split) name IS the display name; when
+     * disabled, prefer the MediaStore canonical name for id-backed files.
      */
-    private suspend fun resolveArtistDisplayName(artistKey: String, file: AudioFile): String {
-        if (!artistKey.startsWith("id:")) {
-            return artistKey
-        }
-        val artistId = artistKey.removePrefix("id:").toLongOrNull() ?: return artistKey
+    private suspend fun resolveArtistDisplayName(
+        artistKey: String,
+        file: AudioFile,
+        separatorEnabled: Boolean
+    ): String {
+        if (separatorEnabled) return artistKey
+        val artistId = file.mediaStoreArtistId?.takeIf { it > 0 } ?: return artistKey
         val artistNames = mediaStoreDataSource.queryArtistNames(listOf(artistId))
-        return artistNames[artistId] ?: file.metadata.artist ?: artistKey
+        return artistNames[artistId] ?: artistKey
     }
 }

@@ -110,6 +110,14 @@ class AudioFileScanner @Inject constructor(
     val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = albumArtistAggregator.albumDiff
     val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = albumArtistAggregator.artistDiff
 
+    /**
+     * The single filtered library for display (Files page, Songs, search).
+     * Raw cache + live whitelist/blacklist/min-duration settings, maintained by
+     * the aggregator. Consumers must read this flow, NOT the raw
+     * [cachedAudioFilesStateFlow].
+     */
+    val filteredAllAudios: StateFlow<List<AudioFile>> = albumArtistAggregator.filteredAllAudios
+
     private val scanMutex = Mutex()
 
     // Raw cached audio files from database (cold Flow; see [cachedAudioFilesStateFlow]
@@ -124,6 +132,10 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Hot [StateFlow] view of [cachedAudioFilesFlow] backed by `applicationScope`.
+     *
+     * RAW, unfiltered: this is every audio file the scans have collected, NOT
+     * what the library displays. UI consumers must read [filteredAllAudios]
+     * instead so whitelist/blacklist/min-duration settings apply uniformly.
      *
      * Files/Albums/Artists screens all subscribe through this flow instead of
      * a cold Flow, so Room emissions fan out to multiple collectors without
@@ -187,15 +199,14 @@ class AudioFileScanner @Inject constructor(
         incremental: Boolean = false,
         forceRefresh: Boolean = false
     ): List<AudioFile> = scanMutex.withLock {
-        val filterSettings = scanFilterProvider.current()
         val servedFromCache = hasCachedData() && !incremental && !forceRefresh
 
         val files = when {
-            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, forceRefresh, filterSettings)
+            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, forceRefresh)
             incremental && hasCachedData() -> {
                 // Progressive scan path: intermediate batches are written to
                 // cache as they arrive, so the UI sees results in stages.
-                incrementalScanStrategy.scan(filterSettings) { batch ->
+                incrementalScanStrategy.scan { batch ->
                     libraryCache.updateCache(batch)
                     libraryCache.bumpCacheVersion()
                 }
@@ -208,7 +219,7 @@ class AudioFileScanner @Inject constructor(
                         return@withLock libraryCache.getCachedAudioFilesOnce()
                     }
                 }
-                globalScanStrategy.scan(filterSettings)
+                globalScanStrategy.scan()
             }
         }
 

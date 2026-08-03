@@ -15,8 +15,7 @@ class IncrementalScanStrategy @Inject constructor(
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val fileProcessor: FileProcessor,
-    private val filterEngine: FilterEngine
+    private val fileProcessor: FileProcessor
 ) : ScanStrategy {
     companion object {
         private const val TAG = "IncrementalScanStrategy"
@@ -24,8 +23,7 @@ class IncrementalScanStrategy @Inject constructor(
         private val chineseCollator = SortUtil.chineseCollator
     }
 
-    override suspend fun scan(filterSettings: FilterEngine.FilterSettings): List<AudioFile> =
-        scan(filterSettings, onProgress = {})
+    override suspend fun scan(): List<AudioFile> = scan(onProgress = {})
 
     /**
      * Progressive overload: [onProgress] is called with intermediate batches
@@ -33,9 +31,11 @@ class IncrementalScanStrategy @Inject constructor(
      * The caller ([AudioFileScanner]) drives [MusicLibraryCache.updateCache]
      * from these callbacks, so the Room cache (and therefore the UI) receives
      * data in stages rather than all at once.
+     *
+     * Returns raw in-scope audio files; filtering happens at read stage in
+     * [AlbumArtistAggregator.filteredAllAudios].
      */
     suspend fun scan(
-        filterSettings: FilterEngine.FilterSettings,
         onProgress: suspend (List<AudioFile>) -> Unit
     ): List<AudioFile> = withContext(Dispatchers.IO) {
         Timber.tag("Voxly").i("IncrementalScanStrategy scan started")
@@ -79,17 +79,15 @@ class IncrementalScanStrategy @Inject constructor(
         val allCurrentPaths = mediaStoreDataSource.queryAllPaths()
         libraryCache.cleanupDeletedFiles(allCurrentPaths.toList())
         val validPathsSet = allCurrentPaths
-        val filteredRetained = retainedFiles.filter { it.path in validPathsSet }
+        val retained = retainedFiles.filter { it.path in validPathsSet }
         settingsDataStore.setLastKnownFileCount(allCurrentPaths.size)
 
         if (updatedFiles.isEmpty()) {
-            return@withContext filterEngine.applyFilters(filteredRetained, filterSettings)
+            return@withContext retained
         }
 
-        val merged = (filteredRetained + updatedFiles)
+        (retained + updatedFiles)
             .distinctBy { it.path }
-
-        filterEngine.applyFilters(merged, filterSettings)
             .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }
 }

@@ -266,12 +266,10 @@ class MusicLibraryCache @Inject constructor(
         invalidateHotCache()
 
         val albumKeys = audioFiles.mapNotNull { CacheChangeKeys.extractAlbumKey(it) }.toSet()
-        val artistKeys = audioFiles.mapNotNull { CacheChangeKeys.extractArtistKey(it) }.toSet()
         _changeFlow.tryEmit(
             CacheChange.FilesBatchUpdated(
                 filePaths = audioFiles.map { it.path },
-                albumKeys = albumKeys,
-                artistKeys = artistKeys
+                albumKeys = albumKeys
             )
         )
 
@@ -355,12 +353,10 @@ class MusicLibraryCache @Inject constructor(
         invalidateHotCache()
 
         val albumKey = CacheChangeKeys.extractAlbumKey(normalized)
-        val artistKey = CacheChangeKeys.extractArtistKey(normalized)
         _changeFlow.tryEmit(
             CacheChange.FileUpdated(
                 filePath = normalized.path,
-                albumKey = albumKey,
-                artistKey = artistKey
+                albumKey = albumKey
             )
         )
 
@@ -398,10 +394,6 @@ class MusicLibraryCache @Inject constructor(
             val af = it.toAudioFile()
             CacheChangeKeys.extractAlbumKey(af)
         }
-        val artistKey = existingFile?.let {
-            val af = it.toAudioFile()
-            CacheChangeKeys.extractArtistKey(af)
-        }
 
         audioFileDao.deleteByPath(normalized)
         artistLinkDao.deleteByTrackId(normalized)
@@ -410,8 +402,7 @@ class MusicLibraryCache @Inject constructor(
         _changeFlow.tryEmit(
             CacheChange.FileDeleted(
                 filePath = normalized,
-                albumKey = albumKey,
-                artistKey = artistKey
+                albumKey = albumKey
             )
         )
 
@@ -435,10 +426,6 @@ class MusicLibraryCache @Inject constructor(
                 val af = it.toAudioFile()
                 CacheChangeKeys.extractAlbumKey(af)
             }.toSet()
-            val artistKeys = existingFiles.mapNotNull {
-                val af = it.toAudioFile()
-                CacheChangeKeys.extractArtistKey(af)
-            }.toSet()
 
             audioFileDao.deleteByPaths(normalized)
             artistLinkDao.deleteByTrackIds(normalized)
@@ -447,8 +434,7 @@ class MusicLibraryCache @Inject constructor(
             _changeFlow.tryEmit(
                 CacheChange.FilesBatchUpdated(
                     filePaths = normalized,
-                    albumKeys = albumKeys,
-                    artistKeys = artistKeys
+                    albumKeys = albumKeys
                 )
             )
 

@@ -73,11 +73,13 @@ class MediaStoreDataSource @Inject constructor(
 
     /**
      * Query audio files from a specific directory using MediaStore.
+     *
+     * Returns every audio file in scope (raw). Whitelist/blacklist/min-duration
+     * filtering is applied downstream by the read-stage filteredAllAudios flow,
+     * so short files and excluded paths remain in the cache for instant toggles.
      */
     suspend fun queryFromDirectory(
-        relativePath: String,
-        minDurationEnabled: Boolean,
-        minDurationMs: Long
+        relativePath: String
     ): List<AudioFile> = withContext(Dispatchers.IO) {
         Timber.tag("Voxly").i("MediaStore queryFromDirectory: relativePath=$relativePath")
         val audioFiles = mutableListOf<AudioFile>()
@@ -98,7 +100,7 @@ class MediaStoreDataSource @Inject constructor(
             AUDIO_URI, FAST_PROJECTION, selection, selectionArgs,
             "${MediaStore.Audio.Media.TITLE} ASC"
         )?.use { cursor ->
-            cursorToAudioFiles(cursor, audioFiles, minDurationEnabled, minDurationMs)
+            cursorToAudioFiles(cursor, audioFiles)
         }
 
         audioFiles
@@ -106,12 +108,12 @@ class MediaStoreDataSource @Inject constructor(
 
     /**
      * Query all audio files using MediaStore.
+     *
+     * Returns every audio file in scope (raw). Whitelist/blacklist/min-duration
+     * filtering is applied downstream by the read-stage filteredAllAudios flow.
      */
-    suspend fun queryAll(
-        minDurationEnabled: Boolean,
-        minDurationMs: Long
-    ): List<AudioFile> = withContext(Dispatchers.IO) {
-        Timber.tag("Voxly").i("MediaStore queryAll: minDurationEnabled=$minDurationEnabled minDurationMs=$minDurationMs")
+    suspend fun queryAll(): List<AudioFile> = withContext(Dispatchers.IO) {
+        Timber.tag("Voxly").i("MediaStore queryAll")
         val audioFiles = mutableListOf<AudioFile>()
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
 
@@ -119,7 +121,7 @@ class MediaStoreDataSource @Inject constructor(
             AUDIO_URI, FAST_PROJECTION, selection, null,
             "${MediaStore.Audio.Media.TITLE} ASC"
         )?.use { cursor ->
-            cursorToAudioFiles(cursor, audioFiles, minDurationEnabled, minDurationMs)
+            cursorToAudioFiles(cursor, audioFiles)
         }
 
         Timber.d(TAG, "Full scan complete: ${audioFiles.size} files found")
@@ -661,9 +663,7 @@ class MediaStoreDataSource @Inject constructor(
      */
     private fun cursorToAudioFiles(
         cursor: Cursor,
-        output: MutableList<AudioFile>,
-        minDurationEnabled: Boolean,
-        minDurationMs: Long
+        output: MutableList<AudioFile>
     ) {
         val columns = CursorColumns(cursor)
 
@@ -676,7 +676,6 @@ class MediaStoreDataSource @Inject constructor(
             if (AudioFormat.fromExtension(extension) == AudioFormat.OTHER) continue
 
             val duration = cursor.getLong(columns.duration)
-            if (duration != 0L && minDurationEnabled && duration < minDurationMs) continue
 
             val albumId = cursor.getLong(columns.albumId).takeIf { it > 0L }
             val artistId = cursor.getLong(columns.artistId).takeIf { it > 0L }

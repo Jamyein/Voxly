@@ -1,18 +1,13 @@
 package com.voxly.domain.usecase
 
 import com.voxly.data.local.MusicLibraryCache
-import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.scanner.FileProcessor
-import com.voxly.data.local.scanner.FilterEngine
 import com.voxly.data.local.scanner.MediaStoreDataSource
 import com.voxly.domain.model.AudioFile
-import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -23,10 +18,7 @@ import javax.inject.Singleton
 class RebuildDatabaseManagerImpl @Inject constructor(
     private val musicLibraryCache: MusicLibraryCache,
     private val mediaStoreDataSource: MediaStoreDataSource,
-    private val filterEngine: FilterEngine,
     private val fileProcessor: FileProcessor,
-    private val settingsDataStore: SettingsDataStore,
-    private val whitelistRepository: WhitelistRepository,
     @Named("io") private val ioDispatcher: CoroutineDispatcher
 ) : RebuildDatabaseManager {
 
@@ -50,36 +42,13 @@ class RebuildDatabaseManagerImpl @Inject constructor(
             musicLibraryCache.clearCache()
             Timber.d(TAG, "Cache cleared")
 
-            val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
-            val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
-
-            val files = mediaStoreDataSource.queryAll(minDurationEnabled, minDurationMs)
+            // Rebuild the raw cache (all in-scope audio). Whitelist/blacklist/
+            // min-duration are applied by the read-stage filteredAllAudios flow,
+            // so the cache stays a complete superset for instant filter toggles.
+            val files = mediaStoreDataSource.queryAll()
             Timber.d(TAG, "Found ${files.size} audio files from MediaStore")
 
-            val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
-            val whitelistPaths = if (whitelistEnabled) {
-                whitelistRepository.getValidWhitelistPathsOnce()
-            } else emptyList()
-
-            val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
-            val blacklistPaths = if (blacklistEnabled) {
-                whitelistRepository.getValidBlacklistPathsOnce()
-            } else emptyList()
-
-            val filteredFiles = filterEngine.applyFilters(
-                files,
-                FilterEngine.FilterSettings(
-                    whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
-                    blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
-                    minDurationEnabled = minDurationEnabled,
-                    whitelistPaths = whitelistPaths,
-                    blacklistPaths = blacklistPaths,
-                    minDurationMs = minDurationMs
-                )
-            )
-            Timber.d(TAG, "After filtering: ${filteredFiles.size} files")
-
-            val totalCount = filteredFiles.size
+            val totalCount = files.size
             if (totalCount == 0) {
                 _state.value = RebuildDatabaseState.Completed(0, 0)
                 return
@@ -90,7 +59,7 @@ class RebuildDatabaseManagerImpl @Inject constructor(
             var processedCount = 0
             var lastProgressUpdate = 0L
 
-            for ((index, audioFile) in filteredFiles.withIndex()) {
+            for ((index, audioFile) in files.withIndex()) {
                 try {
                     val enrichedFile = fileProcessor.createAudioFileFromPath(audioFile.path)
                     enriched.add(enrichedFile)
