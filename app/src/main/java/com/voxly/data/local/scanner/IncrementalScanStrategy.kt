@@ -6,6 +6,7 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -19,7 +20,7 @@ class IncrementalScanStrategy @Inject constructor(
 ) : ScanStrategy {
     companion object {
         private const val TAG = "IncrementalScanStrategy"
-        private const val PROGRESS_BATCH_SIZE = 100
+        private const val PROGRESS_BATCH_SIZE = 500
         private val chineseCollator = SortUtil.chineseCollator
     }
 
@@ -40,16 +41,21 @@ class IncrementalScanStrategy @Inject constructor(
     ): List<AudioFile> = withContext(Dispatchers.IO) {
         Timber.tag("Voxly").i("IncrementalScanStrategy scan started")
 
-        // 1. Determine the last scan timestamp. The Room cache stores
-        //    System.currentTimeMillis(); MediaStore DATE_MODIFIED is in
+        // 1. Determine the last scan baseline. The authoritative source is the
+        //    persisted last-scan-completion time (a real scan boundary, not a
+        //    per-row cache-write time). Fall back to MAX(lastScannedAt) for
+        //    legacy caches that predate the key. MediaStore DATE_MODIFIED is in
         //    seconds, so divide by 1000 for the WHERE clause.
+        val lastScanCompleted = settingsDataStore.lastScanCompletedAt.first()
         val lastScanTime = libraryCache.getLastScanTime()
-        val lastScanTimeSecs = if (lastScanTime != null && lastScanTime > 0L) {
-            lastScanTime / 1000L
-        } else 0L
+        val lastScanTimeSecs = when {
+            lastScanCompleted > 0L -> lastScanCompleted / 1000L
+            lastScanTime != null && lastScanTime > 0L -> lastScanTime / 1000L
+            else -> 0L
+        }
 
         // 2. Query only files changed since the last scan (O(M) instead of O(N)).
-        //    When lastScanTime is 0 (no cached scan), falls back to the full query.
+        //    When the baseline is 0 (no scan history), falls back to the full query.
         val currentFiles = mediaStoreDataSource.queryFilesChangedSince(lastScanTimeSecs)
         val currentPaths = currentFiles.map { it.first }.toSet()
         Timber.i(TAG, "Incremental scan: ${currentFiles.size} files changed since last scan")
@@ -81,6 +87,11 @@ class IncrementalScanStrategy @Inject constructor(
         val validPathsSet = allCurrentPaths
         val retained = retainedFiles.filter { it.path in validPathsSet }
         settingsDataStore.setLastKnownFileCount(allCurrentPaths.size)
+
+        // Record the scan boundary. A no-op diff (nothing changed) is still a
+        // successful scan: the next comparison "DATE_MODIFIED > now" then only
+        // catches changes that occur after this point.
+        settingsDataStore.setLastScanCompletedAt(System.currentTimeMillis())
 
         if (updatedFiles.isEmpty()) {
             return@withContext retained

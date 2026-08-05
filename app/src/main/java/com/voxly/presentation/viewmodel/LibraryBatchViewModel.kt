@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.RefreshStrategy
 import com.voxly.domain.model.BatchResult
 import com.voxly.domain.model.BatchStatus
 import com.voxly.domain.repository.AudioRepository
@@ -67,7 +68,8 @@ class LibraryBatchViewModel @Inject constructor(
     private fun executeBatch(
         items: List<String>,
         operation: suspend (String) -> Result<Unit>,
-        itemName: (String) -> String = { it }
+        itemName: (String) -> String = { it },
+        requiresRefresh: Boolean = false
     ): Job {
         Timber.tag("Voxly").i("LibraryBatchViewModel batch started: itemCount=${items.size}")
         batchJob?.cancel()
@@ -88,10 +90,12 @@ class LibraryBatchViewModel @Inject constructor(
                 Timber.tag(TAG).e(e, "Batch operation failed")
             } finally {
                 _isBatchProcessing.update { false }
-                libraryRepository.refresh(
-                    forceRefresh = false,
-                    bypassVersionCache = true
-                )
+                // Metadata-only batches already sync each file via updateMetadata,
+                // so a global rescan would be wasted work. Only file-identity
+                // changes (rename) need a refresh.
+                if (requiresRefresh) {
+                    libraryRepository.refresh(RefreshStrategy.INCREMENTAL)
+                }
             }
         }.also { batchJob = it }
     }
@@ -178,6 +182,7 @@ class LibraryBatchViewModel @Inject constructor(
     fun batchRenameFiles(filePaths: List<String>, pattern: String, startNumber: Int) {
         executeBatch(
             items = filePaths,
+            requiresRefresh = true,
             operation = { filePath ->
                 val index = filePaths.indexOf(filePath)
                 val file = File(filePath)

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.palette.graphics.Palette
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.RefreshStrategy
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
@@ -180,8 +181,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
             // trigger a real scan attempt, not short-circuit on MediaStore
             // version equality.
             libraryRepository.refresh(
-                forceRefresh = forceRefresh,
-                bypassVersionCache = true
+                if (forceRefresh) RefreshStrategy.FORCE else RefreshStrategy.INCREMENTAL
             )
             loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
         }

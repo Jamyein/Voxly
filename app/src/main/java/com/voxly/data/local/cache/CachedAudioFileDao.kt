@@ -38,64 +38,6 @@ interface CachedAudioFileDao {
     suspend fun getAudioFileByPath(path: String): CachedAudioFileEntity?
     
     /**
-     * Gets audio files by album ID.
-     * Uses pre-computed sortTitle column for B-tree index usage.
-     */
-    @Query("SELECT * FROM cached_audio_files WHERE albumId = :albumId ORDER BY trackNumber ASC, sortTitle ASC")
-    fun getAudioFilesByAlbum(albumId: Long): Flow<List<CachedAudioFileEntity>>
-
-    /**
-     * Gets audio files by artist name.
-     * Uses pre-computed sortAlbum/sortTitle columns + composite index for efficient sorting.
-     */
-    @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY sortAlbum ASC, trackNumber ASC, sortTitle ASC")
-    fun getAudioFilesByArtist(artist: String): Flow<List<CachedAudioFileEntity>>
-
-    /**
-     * Gets audio files by artist name (one-shot).
-     * Uses pre-computed sortAlbum/sortTitle columns + composite index for efficient sorting.
-     */
-    @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY sortAlbum ASC, trackNumber ASC, sortTitle ASC")
-    suspend fun getAudioFilesByArtistOnce(artist: String): List<CachedAudioFileEntity>
-    
-    // ==================== Paging Support ====================
-    
-    /**
-     * Gets paged audio files for large libraries.
-     * Uses pre-computed sortTitle column for B-tree index usage.
-     * @param offset Starting position (0-based)
-     * @param limit Number of items per page
-     */
-    @Query("SELECT * FROM cached_audio_files ORDER BY sortTitle ASC LIMIT :limit OFFSET :offset")
-    suspend fun getAudioFilesPaged(offset: Int, limit: Int): List<CachedAudioFileEntity>
-    
-    /**
-     * Gets total count for paging.
-     */
-    @Query("SELECT COUNT(*) FROM cached_audio_files")
-    suspend fun getTotalCount(): Int
-    
-    /**
-     * Gets paged audio files with filtering by directory whitelist.
-     * Uses range query (>= / <) instead of GLOB for B-tree index usage.
-     * Uses pre-computed sortTitle column for B-tree index usage.
-     */
-    @Query("""
-        SELECT * FROM cached_audio_files 
-        WHERE path >= :directoryPath AND path < :directoryPath || 'zzzzzzzz'
-        ORDER BY sortTitle ASC 
-        LIMIT :limit OFFSET :offset
-    """)
-    suspend fun getAudioFilesPagedByDirectory(directoryPath: String, offset: Int, limit: Int): List<CachedAudioFileEntity>
-    
-    /**
-     * Gets total count with directory filtering.
-     * Uses range query (>= / <) instead of GLOB for B-tree index usage.
-     */
-    @Query("SELECT COUNT(*) FROM cached_audio_files WHERE path >= :directoryPath AND path < :directoryPath || 'zzzzzzzz'")
-    suspend fun getTotalCountByDirectory(directoryPath: String): Int
-    
-    /**
      * Searches audio files by title, artist, or album using FTS4 full-text search.
      * Uses MATCH for efficient indexed queries instead of slow LIKE '%query%'.
      *
@@ -115,26 +57,6 @@ interface CachedAudioFileDao {
     fun searchAudioFiles(query: String): Flow<List<CachedAudioFileEntity>>
     
     /**
-     * Gets all distinct artists.
-     */
-    @Query("SELECT DISTINCT artist FROM cached_audio_files WHERE artist IS NOT NULL AND artist != '' ORDER BY artist ASC")
-    suspend fun getAllArtists(): List<String>
-    
-    /**
-     * Gets all distinct albums.
-     */
-    @Query("SELECT DISTINCT album, albumId FROM cached_audio_files WHERE album IS NOT NULL AND album != '' ORDER BY album ASC")
-    suspend fun getAllAlbums(): List<AlbumInfo>
-    
-    /**
-     * Data class for album info.
-     */
-    data class AlbumInfo(
-        val album: String,
-        val albumId: Long?
-    )
-    
-    /**
      * Gets count of cached files.
      */
     @Query("SELECT COUNT(*) FROM cached_audio_files")
@@ -151,6 +73,21 @@ interface CachedAudioFileDao {
      */
     @Query("SELECT EXISTS(SELECT 1 FROM cached_audio_files LIMIT 1)")
     suspend fun hasCache(): Boolean
+
+    /**
+     * Deterministic fingerprint of the cached file rows: count + the most
+     * recent per-row write time + the most recent file mtime observed at
+     * write time. Any add/update/delete/sync changes at least one of the
+     * three, so the fingerprint changes whenever the cache content changes.
+     * Used to validate the persisted [com.voxly.data.local.cache.AggregateSnapshotEntity].
+     */
+    @Query("""
+        SELECT CAST(COUNT(*) AS TEXT) || '|' ||
+               IFNULL(CAST(MAX(lastScannedAt) AS TEXT), '0') || '|' ||
+               IFNULL(CAST(MAX(fileLastModifiedAt) AS TEXT), '0')
+        FROM cached_audio_files
+    """)
+    suspend fun getContentFingerprint(): String
     
     /**
      * Gets file paths and modification times for incremental scan.
@@ -168,6 +105,21 @@ interface CachedAudioFileDao {
     
     @Query("SELECT path, album, albumArtist, artist FROM cached_audio_files WHERE path IN (:paths)")
     suspend fun getAlbumInfoByPaths(paths: List<String>): List<AlbumPathInfo>
+
+    /** Full entities for a bounded set of paths (used to materialize only the backfill candidates). */
+    @Query("SELECT * FROM cached_audio_files WHERE path IN (:paths)")
+    suspend fun getAudioFilesByPaths(paths: List<String>): List<CachedAudioFileEntity>
+
+    /**
+     * Paths of cached files missing core metadata (year, sampleRate, or album) —
+     * the backfill candidate set. Path-only projection avoids materializing the
+     * whole library just to find what needs enrichment.
+     */
+    @Query("""
+        SELECT path FROM cached_audio_files
+        WHERE year IS NULL OR year = '' OR sampleRate = 0 OR album IS NULL OR album = ''
+    """)
+    suspend fun getPathsMissingMetadata(): List<String>
 
     /**
      * Minimal projection used by [com.voxly.data.local.replaygain.AlbumGroupingProvider].

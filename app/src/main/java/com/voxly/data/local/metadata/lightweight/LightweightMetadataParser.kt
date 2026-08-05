@@ -10,12 +10,15 @@ import java.nio.charset.Charset
 /**
  * Lightweight metadata parser for MP3 (ID3v2.3/2.4) and FLAC.
  *
- * Only reads the first portion of the file (typically < 128 KB) to extract
+ * Only reads the first portion of the file (typically well under 1 MB) to extract
  * common text tags, bypassing the full TagLib JNI round-trip for the hot path.
+ * Files whose tag block (often because of embedded cover art) exceeds the read
+ * limit fall back to TagLib — the 1 MB cap keeps that fallback rare while still
+ * costing only one sequential read.
  */
 object LightweightMetadataParser {
     private const val TAG = "LightweightMetadataParser"
-    private const val DEFAULT_READ_LIMIT = 128 * 1024
+    private const val DEFAULT_READ_LIMIT = 1024 * 1024
 
     data class Result(
         val metadata: AudioMetadata,
@@ -28,7 +31,6 @@ object LightweightMetadataParser {
      * in which case the caller should fall back to TagLib.
      */
     fun parse(file: File, readLimit: Int = DEFAULT_READ_LIMIT): Result? {
-        Timber.tag("Voxly").i("LightweightMetadataParser parse: file=${file.name} extension=${file.extension}")
         return try {
             when (file.extension.lowercase()) {
                 "mp3" -> ID3v2Parser.parse(file, readLimit)
@@ -88,6 +90,10 @@ internal object ID3v2Parser {
             val frameData = bytes.copyOfRange(offset + frameHeaderSize, offset + frameHeaderSize + frameSize)
             if (frameId.startsWith("T")) {
                 parseTextFrame(frameData)?.let { frames[frameId] = it }
+            } else if (frameId == "USLT") {
+                parseLyricsFrame(frameData)?.let { frames[frameId] = it }
+            } else if (frameId == "COMM") {
+                parseCommentFrame(frameData)?.let { frames[frameId] = it }
             }
             offset += frameHeaderSize + frameSize
         }
@@ -103,7 +109,9 @@ internal object ID3v2Parser {
             totalTracks = parseTrackDisc(frames["TRCK"])?.second,
             discNumber = parseTrackDisc(frames["TPOS"])?.first,
             totalDiscs = parseTrackDisc(frames["TPOS"])?.second,
-            composer = frames["TCOM"]
+            composer = frames["TCOM"],
+            lyrics = frames["USLT"],
+            comment = frames["COMM"]
         )
 
         // Consider parse successful if we got at least one core field
@@ -146,6 +154,44 @@ internal object ID3v2Parser {
         }
         // Some frames contain multiple null-separated values; take the first
         return string.trim().replace("\u0000", " ").trim().takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * USLT (unsynchronized lyrics) frame: encoding(1) + language(3) +
+     * short content descriptor + terminator + lyric text.
+     */
+    private fun parseLyricsFrame(data: ByteArray): String? {
+        if (data.size < 4) return null
+        val encoding = data[0].toInt() and 0xFF
+        val terminatorLen = if (encoding == 1 || encoding == 3) 2 else 1
+        var idx = 4
+        while (idx < data.size) {
+            if (idx + terminatorLen > data.size) return null
+            if (data[idx].toInt() == 0 && (terminatorLen == 1 || data[idx + 1].toInt() == 0)) break
+            idx += terminatorLen
+        }
+        if (idx + terminatorLen > data.size) return null
+        return parseTextFrame(byteArrayOf(data[0], *data.copyOfRange(idx + terminatorLen, data.size))).orEmpty()
+            .takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * COMM (comment) frame: same shape as USLT but with a short description
+     * separator before the actual comment text.
+     */
+    private fun parseCommentFrame(data: ByteArray): String? {
+        if (data.size < 4) return null
+        val encoding = data[0].toInt() and 0xFF
+        val terminatorLen = if (encoding == 1 || encoding == 3) 2 else 1
+        var idx = 4
+        while (idx < data.size) {
+            if (idx + terminatorLen > data.size) return null
+            if (data[idx].toInt() == 0 && (terminatorLen == 1 || data[idx + 1].toInt() == 0)) break
+            idx += terminatorLen
+        }
+        if (idx + terminatorLen > data.size) return null
+        return parseTextFrame(byteArrayOf(data[0], *data.copyOfRange(idx + terminatorLen, data.size))).orEmpty()
+            .takeIf { it.isNotBlank() }
     }
 
     private fun decodeUtf16(bytes: ByteArray): String {
@@ -219,7 +265,9 @@ internal object FlacVorbisCommentParser {
             totalTracks = comments["TRACKTOTAL"]?.toIntOrNull() ?: comments["TOTALTRACKS"]?.toIntOrNull(),
             discNumber = comments["DISCNUMBER"]?.toIntOrNull(),
             totalDiscs = comments["DISCTOTAL"]?.toIntOrNull() ?: comments["TOTALDISCS"]?.toIntOrNull(),
-            composer = comments["COMPOSER"]
+            composer = comments["COMPOSER"],
+            lyrics = comments["LYRICS"] ?: comments["UNSYNCEDLYRICS"],
+            comment = comments["COMMENT"]
         )
 
         val hasCoreData = !metadata.title.isNullOrBlank() ||
@@ -327,7 +375,9 @@ internal object M4aMetadataParser {
             trackNumber = numericTags["trkn"]?.first,
             totalTracks = numericTags["trkn"]?.second,
             discNumber = numericTags["disk"]?.first,
-            totalDiscs = numericTags["disk"]?.second
+            totalDiscs = numericTags["disk"]?.second,
+            lyrics = textTags["©lyr"],
+            comment = textTags["©cmt"]
         )
 
         val hasCoreData = !metadata.title.isNullOrBlank() ||
@@ -549,7 +599,9 @@ internal object OggVorbisCommentParser {
             totalTracks = comments["TRACKTOTAL"]?.toIntOrNull() ?: comments["TOTALTRACKS"]?.toIntOrNull(),
             discNumber = comments["DISCNUMBER"]?.toIntOrNull(),
             totalDiscs = comments["DISCTOTAL"]?.toIntOrNull() ?: comments["TOTALDISCS"]?.toIntOrNull(),
-            composer = comments["COMPOSER"]
+            composer = comments["COMPOSER"],
+            lyrics = comments["LYRICS"] ?: comments["UNSYNCEDLYRICS"],
+            comment = comments["COMMENT"]
         )
 
         val hasCoreData = !metadata.title.isNullOrBlank() ||
@@ -599,7 +651,10 @@ internal object OggVorbisCommentParser {
 
 internal fun readHead(file: File, limit: Int): ByteArray {
     return FileInputStream(file).use { fis ->
-        val buf = ByteArray(limit.coerceAtMost(file.length().toInt().coerceAtLeast(limit)))
+        // Allocate only min(fileSize, limit) — small files shouldn't pay a
+        // full 1 MB allocation just to have their first bytes read.
+        val alloc = limit.coerceAtMost(file.length().coerceAtLeast(1).toInt())
+        val buf = ByteArray(alloc)
         val read = fis.read(buf)
         if (read < buf.size) buf.copyOf(read) else buf
     }

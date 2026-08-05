@@ -13,12 +13,14 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.UiStateDataStore
 import com.voxly.data.local.DirFileSortOption
 import com.voxly.data.local.FileSortOption
+import com.voxly.data.local.toFileSortOption
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.RefreshStrategy
 import com.voxly.core.util.Constants
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -76,6 +78,12 @@ class LibraryScanViewModel @Inject constructor(
     // they are only grouped out of the album-artist aggregator.
     val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAllAudios
 
+    /** True once the library's initial build finished (data rendered or empty). */
+    val libraryInitialized: StateFlow<Boolean> = audioFileScanner.libraryInitialized
+
+    /** Full-text search via FTS4. Offloads filtering to the DB index. */
+    fun searchFiles(query: String): Flow<List<AudioFile>> = musicLibraryCache.searchFiles(query)
+
     val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
         .stateIn(
             scope = viewModelScope,
@@ -99,7 +107,7 @@ class LibraryScanViewModel @Inject constructor(
         )
 
     val currentFileSortOption: StateFlow<FileSortOption> = uiStateDataStore.fileBrowserSortOption
-        .map { it.toFileSortOption() }
+        .map { toFileSortOption(it) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
@@ -114,20 +122,9 @@ class LibraryScanViewModel @Inject constructor(
             initialValue = DirFileSortOption.NAME_ASC
         )
 
-    val sortedAllAudios: StateFlow<List<AudioFile>> = combine(
-        allAudios,
-        currentFileSortOption
-    ) { audios, sortOption ->
-        audios to sortOption
-    }.map { (audios, sortOption) ->
-        sortAudioFiles(audios, sortOption)
-    }.flowOn(Dispatchers.Default)
-        .distinctUntilChanged()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = emptyList()
-        )
+    // Sorted by the scanner's app-scope Eagerly projection (hot before
+    // navigation — same unified pattern as sortedAlbums/artistListItems).
+    val sortedAllAudios: StateFlow<List<AudioFile>> = audioFileScanner.sortedAllAudios
 
     private val _selectedDirectories = MutableStateFlow<List<SelectedDirectory>>(emptyList())
     val selectedDirectories: StateFlow<List<SelectedDirectory>> = _selectedDirectories.asStateFlow()
@@ -227,6 +224,15 @@ class LibraryScanViewModel @Inject constructor(
      */
     private var lastResumeRefreshAt = 0L
 
+    /**
+     * True until the first ON_RESUME fires. The first resume happens during
+     * onCreate, while the cold-start SnapshotCheck (checkDirectorySnapshotsOnStart)
+     * already requests the identical INCREMENTAL scan — emitting a second one
+     * only delays the merge flush. Skipping it leaves the SnapshotCheck as the
+     * single cold-start trigger.
+     */
+    private var isFirstResume = true
+
     // Separate Job coordinator for directory-scoped scans. This guards every
     // entry point that calls scanSelectedDirectories() so concurrent
     // checkDirectorySnapshotsOnStart, refreshDirectoryIncremental, and addDirectory
@@ -244,8 +250,13 @@ class LibraryScanViewModel @Inject constructor(
     /**
      * Merges a [LibraryChangeEvent] into the pending state.
      *  - [LibraryChangeEvent.Directory] coalesces per directory URI.
-     *  - [LibraryChangeEvent.Global] / [LibraryChangeEvent.SnapshotCheck]
-     *    supersede all pending directory work and schedule one merged scan.
+     *  - [LibraryChangeEvent.Global] supersede all pending directory work and
+     *    schedule one merged scan. Merge rule: the strongest pending strategy
+     *    wins — a later LAZY request (e.g. ON_RESUME after the folder picker
+     *    closes) must NOT downgrade a pending INCREMENTAL/FORCE scan, or the
+     *    whitelist-add scan gets replaced by a LAZY no-op and never runs.
+     *  - [LibraryChangeEvent.SnapshotCheck] schedules the cold-start incremental
+     *    scan (see [checkDirectorySnapshotsOnStart]).
      */
     private fun handleChangeEvent(event: LibraryChangeEvent) {
         when (event) {
@@ -255,16 +266,26 @@ class LibraryScanViewModel @Inject constructor(
                 scheduleFlush()
             }
             is LibraryChangeEvent.Global -> {
-                pendingGlobal = event
-                pendingDirectories.clear()
-                scheduleFlush()
+                val existing = pendingGlobal
+                // Strategy strengths by enum ordinal: LAZY(0) < INCREMENTAL(1) < FORCE(2).
+                if (existing == null || event.strategy.ordinal >= existing.strategy.ordinal) {
+                    pendingGlobal = event
+                    pendingDirectories.clear()
+                    scheduleFlush()
+                }
             }
             is LibraryChangeEvent.SnapshotCheck -> {
                 if (pendingGlobal == null) {
-                    pendingGlobal = LibraryChangeEvent.Global(
-                        forceRefresh = false,
-                        bypassVersionCache = true
-                    )
+                    // Cold-start snapshot check. With cached data the aggregator
+                    // already rendered the library, but this incremental scan is
+                    // the guaranteed purge point for external deletions: SAF
+                    // trees have no change notification and the MediaStore version
+                    // never changes for SAF-only deletions (lesson #14).
+                    // INCREMENTAL is a diff scan, NOT a full rescan — unchanged
+                    // files are retained from the cache, only changed files are
+                    // re-read. loadAudioFiles releases the skeleton as soon as
+                    // cache is confirmed, so this does not flash the loading state.
+                    pendingGlobal = LibraryChangeEvent.Global(RefreshStrategy.INCREMENTAL)
                 }
                 scheduleFlush()
             }
@@ -283,10 +304,7 @@ class LibraryScanViewModel @Inject constructor(
         val global = pendingGlobal
         pendingGlobal = null
         if (global != null) {
-            loadAudioFiles(
-                forceRefresh = global.forceRefresh,
-                bypassVersionCache = global.bypassVersionCache,
-            )
+            loadAudioFiles(global.strategy)
             return
         }
 
@@ -326,6 +344,21 @@ class LibraryScanViewModel @Inject constructor(
     }
 
     init {
+        // Cache confirmed → release the initial-load skeleton IMMEDIATELY, not
+        // when loadAudioFiles finally runs. The scan pipeline (event-bus merge
+        // window + VM init delay + hasCachedData probes) can take >1s to reach
+        // loadAudioFiles, during which the Directory/All overview would flash
+        // the skeleton even though the aggregator already rendered the cached
+        // library (snapshot hydration / filteredAllAudios). Display is fully
+        // independent of the scan: the cold-start INCREMENTAL reconciles SAF
+        // dirs in the background while cached data shows instantly.
+        viewModelScope.launch {
+            audioFileScanner.libraryInitialized.first { it }
+            if (audioFileScanner.hasCachedData()) {
+                _isInitialLoad.update { false }
+            }
+        }
+
         // Unified change-event bus consumer. Every refresh trigger
         // (MediaStore observer, SAF watcher, pull-to-refresh, batch edits,
         // metadata save, on-resume, cold start) emits a LibraryChangeEvent via
@@ -367,17 +400,14 @@ class LibraryScanViewModel @Inject constructor(
         // previous snapshot-count vs _directoryFiles-size gate was unreliable
         // for external deletions: both values reflected the pre-deletion
         // state, so they matched and no scan ran — files deleted via the
-        // system file manager never disappeared from the cache. Also, the
-        // MediaStore version short-circuit in loadAudioFiles skips SAF-only
-        // deletions entirely (the version doesn't change for SAF trees).
+        // system file manager never disappeared from the cache. Also, SAF-only
+        // deletions never change the MediaStore version, so no watcher fires.
         //
-        // SnapshotCheck maps to a global incremental scan with
-        // bypassVersionCache=true (skips both the version short-circuit and,
-        // via the cache-serving branch's !bypassVersionCache gate, the
-        // whitelist cache-serve), so the incremental scan actually executes
-        // and purges deleted files for both whitelist and global paths. The
-        // merge window coalesces this with any concurrent refresh request so
-        // no double scan runs.
+        // SnapshotCheck maps to Global(INCREMENTAL) in handleChangeEvent — a
+        // diff scan (mtime-based, unchanged files retained), not a full rescan,
+        // and the skeleton is released by loadAudioFiles as soon as cache is
+        // confirmed so cold start stays instant. The merge window coalesces
+        // this with any concurrent refresh request so no double scan runs.
         libraryDataHolder.requestSnapshotCheck()
     }
 
@@ -396,42 +426,64 @@ class LibraryScanViewModel @Inject constructor(
      * User manual refresh (pull-to-refresh) triggers incremental scan.
      * Force refresh triggers full rescan.
      *
-     * @param bypassVersionCache Skip the MediaStore version short-circuit.
-     *   Pass `true` from user-initiated pull-to-refresh; system triggers keep
-     *   the default `false`.
+     * @param strategy LAZY skips the scan when cache exists; INCREMENTAL always
+     *   runs the diff scan (mtime-based, unchanged files retained); FORCE does a
+     *   full rescan. Cold-start snapshot checks and resume callbacks use
+     *   INCREMENTAL so external deletions in SAF whitelist dirs are purged
+     *   (lesson #14).
      */
-    fun loadAudioFiles(
-        forceRefresh: Boolean = false,
-        bypassVersionCache: Boolean = false,
-    ) {
+    fun loadAudioFiles(strategy: RefreshStrategy = RefreshStrategy.LAZY) {
+        // A LAZY no-op must never cancel an in-flight scan. loadAudioFiles used
+        // to cancel scanJob unconditionally, so a resume/periodic LAZY event
+        // arriving mid-scan killed the whitelist incremental before it wrote to
+        // the cache — logs showed the scan, the UI never updated. LAZY means
+        // "nothing to do if cache exists", so an in-flight INCREMENTAL is always
+        // more valuable; let it finish.
+        if (strategy == RefreshStrategy.LAZY && scanJob?.isActive == true) return
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            val isIncremental = !forceRefresh
+            val forceRefresh = strategy == RefreshStrategy.FORCE
+            val isIncremental = strategy != RefreshStrategy.FORCE
+            val hasCacheNow = audioFileScanner.hasCachedData()
+            Timber.tag("Voxly").i("DIAG loadAudioFiles strategy=$strategy hasCache=$hasCacheNow force=$forceRefresh")
+            // LAZY + cached data = nothing to scan: the aggregator already
+            // rendered the cache. Short-circuit BEFORE beginScan so the
+            // skeleton / pull-to-refresh never flashes on cold start.
+            if (strategy == RefreshStrategy.LAZY && hasCacheNow) {
+                _isInitialLoad.update { false }
+                return@launch
+            }
+            // MediaStore version short-circuit: when the collection is
+            // provably unchanged since the last successful scan, the diff
+            // inside the incremental scan would find nothing anyway — skip
+            // the two full MediaStore queries + purge entirely. Skipped when
+            // FORCE (user asked for a real rescan) and when SAF whitelist
+            // dirs are configured (their deletions never bump the MediaStore
+            // version, so they are the guaranteed purge point — lesson #14).
+            // The MediaStore observer / SAF watcher fire only on real
+            // changes, so a changed version always lets this pass.
+            if (isIncremental && hasCacheNow && shouldSkipScanForUnchangedMediaStore()) {
+                Timber.tag("Voxly").i("DIAG MediaStore version unchanged, skipping cold-start/resume scan")
+                _isInitialLoad.update { false }
+                return@launch
+            }
+            // Cache is already rendered by the aggregator's kickOffInitialBuild —
+            // release the skeleton immediately so the cold-start INCREMENTAL scan
+            // runs silently in the background instead of flashing the skeleton /
+            // spinner. A first install (no cache) keeps the skeleton until the
+            // full scan finishes.
+            if (hasCacheNow) {
+                _isInitialLoad.update { false }
+            }
             val shouldShowRefresh = forceRefresh || _isInitialLoad.value
             if (shouldShowRefresh) {
                 libraryDataHolder.beginScan()
             }
             try {
-                // _selectedDirectories is kept in sync with DataStore by the
-                // collector at init block (lines 264-272), so this call is
-                // intentionally omitted from the hot scan path. It runs only
-                // when the DataStore value actually changes.
-
-                // The MediaStore version short-circuit lives in
-                // LibraryRepositoryImpl.refresh(): unchanged version + cached
-                // data bails out before a request ever reaches the event bus.
-
                 if (_selectedDirectories.value.isNotEmpty()) {
                     val hasCache = audioFileScanner.hasCachedData()
-                    // Cache-served path needs no write here — directoryFiles is
-                    // derived from allAudios (Room-backed). Only a real scan
-                    // (no cache, force, or bypassVersionCache) runs.
-                    if (forceRefresh || !hasCache || bypassVersionCache) {
+                    if (forceRefresh || !hasCache || strategy == RefreshStrategy.INCREMENTAL) {
                         val useIncremental = isIncremental && hasCache
-                        // Awaited synchronously so cancellation of scanJob
-                        // (e.g. via collectLatest on a new refresh) also
-                        // cancels the in-flight directory scan via
-                        // structured concurrency.
                         scanSelectedDirectories(_selectedDirectories.value, useIncremental, forceRefresh)
                     }
                     _isInitialLoad.update { false }
@@ -445,12 +497,11 @@ class LibraryScanViewModel @Inject constructor(
                         forceRefresh = forceRefresh
                     )
                 } else if (isIncremental) {
-                    // Previously called audioFileScanner.loadAudioFiles(true),
-                    // which short-circuited on cache hits and silently skipped
-                    // the scan. Going through scan() directly ensures the
-                    // spinner corresponds to a real IncrementalScanStrategy
-                    // run whenever the user (or a system trigger with
-                    // bypassVersionCache=true) asks for one.
+                    // Diff-based incremental scan (MediaStore DATE_MODIFIED >
+                    // last scan time): re-reads only changed files, retains the
+                    // rest from cache, purges files deleted from MediaStore.
+                    // Runs whenever the user, a system trigger, or a cold-start
+                    // snapshot check asks for one.
                     audioFileScanner.scan(
                         directoryPaths = emptyList(),
                         incremental = true,
@@ -483,6 +534,24 @@ class LibraryScanViewModel @Inject constructor(
     }
 
     /**
+     * True when the MediaStore audio collection is provably unchanged since
+     * the last successful scan: cache exists, a version was recorded, and the
+     * current [MediaStore.getVersion] matches it.
+     *
+     * Never returns true when SAF whitelist directories are configured — their
+     * external deletions do not bump the MediaStore version, so the per-dir
+     * incremental scan on resume/start stays the guaranteed purge point
+     * (lesson #14).
+     */
+    private suspend fun shouldSkipScanForUnchangedMediaStore(): Boolean {
+        // SAF-picked dirs bypass the version check entirely.
+        if (_selectedDirectories.value.isNotEmpty()) return false
+        val lastVersion = settingsDataStore.lastKnownMediaStoreVersion.first()
+        if (lastVersion.isEmpty()) return false
+        return runCatching { mediaStoreVersionCache.current() }.getOrDefault("") == lastVersion
+    }
+
+    /**
      * Unified refresh entry point for all screens.
      * - forceRefresh=true: Full rescan, ignores cache
      * - forceRefresh=false: Incremental scan, detects new/modified files
@@ -490,8 +559,7 @@ class LibraryScanViewModel @Inject constructor(
     fun refresh(forceRefresh: Boolean = false) {
         Timber.tag("Voxly").i("LibraryScanViewModel scan triggered: incremental=${!forceRefresh}")
         libraryRepository.refresh(
-            forceRefresh = forceRefresh,
-            bypassVersionCache = true
+            if (forceRefresh) RefreshStrategy.FORCE else RefreshStrategy.INCREMENTAL
         )
     }
 
@@ -507,14 +575,14 @@ class LibraryScanViewModel @Inject constructor(
      * shade, permission dialogs) while still firing for any meaningful
      * backgrounding (>3s).
      *
-     * `bypassVersionCache=true` ensures the scan actually runs: it skips the
-     * MediaStore version short-circuit in [loadAudioFiles] (which would
-     * otherwise bail out for SAF-only deletions where the version doesn't
-     * change) AND — via the cache-serving branch's `!bypassVersionCache` gate
-     * — forces the whitelist directory path into [scanSelectedDirectories]
-     * → [com.voxly.data.local.scanner.DirectoryScanStrategy.scanDirectoriesIncremental],
-     * which queries the current filesystem paths and purges cached rows
-     * whose paths are gone. The global (no-whitelist) path flows to
+     * Uses [RefreshStrategy.INCREMENTAL] (not LAZY): LAZY would skip the scan
+     * whenever cache exists, silently breaking external-deletion sync — SAF
+     * trees have no change notification and SAF-only deletions never change
+     * the MediaStore version, so resume is the guaranteed purge point
+     * (lesson #14). The whitelist path flows to
+     * [com.voxly.data.local.scanner.DirectoryScanStrategy.scanDirectoriesIncremental], which
+     * queries the current filesystem paths and purges cached rows whose paths
+     * are gone; the global (no-whitelist) path flows to
      * [com.voxly.data.local.scanner.IncrementalScanStrategy], which calls
      * [com.voxly.data.local.MusicLibraryCache.cleanupDeletedFiles].
      *
@@ -523,13 +591,23 @@ class LibraryScanViewModel @Inject constructor(
      * [checkDirectorySnapshotsOnStart]) so no double scan runs.
      */
     fun refreshOnResume() {
+        // The first ON_RESUME fires during onCreate; the cold-start SnapshotCheck
+        // already requests the identical INCREMENTAL scan, so skip the duplicate
+        // and let the merge window coalesce the real events.
+        if (isFirstResume) {
+            isFirstResume = false
+            return
+        }
         val now = System.currentTimeMillis()
         if (now - lastResumeRefreshAt < RESUME_REFRESH_THROTTLE_MS) return
         lastResumeRefreshAt = now
-        libraryRepository.refresh(
-            forceRefresh = false,
-            bypassVersionCache = true,
-        )
+        // INCREMENTAL (not LAZY): SAF-picked whitelist directories have no
+        // filesystem change notification and SAF-only deletions never change
+        // the MediaStore version, so resume is the guaranteed purge/diff point
+        // (lesson #14). LAZY would skip the scan whenever cache exists, silently
+        // breaking external-deletion sync. Still throttled above to coalesce
+        // resume/pause bursts.
+        libraryRepository.refresh(RefreshStrategy.INCREMENTAL)
     }
 
     fun refreshDirectoryIncremental(directoryUri: String) {
@@ -623,10 +701,7 @@ class LibraryScanViewModel @Inject constructor(
             _openedDirectoryUri.update { null }
         }
         persistSelectedDirectories(updatedDirectories)
-        libraryRepository.refresh(
-            forceRefresh = false,
-            bypassVersionCache = true
-        )
+        libraryRepository.refresh(RefreshStrategy.INCREMENTAL)
     }
 
     /**
@@ -636,10 +711,7 @@ class LibraryScanViewModel @Inject constructor(
         _selectedDirectories.update { emptyList() }
         _openedDirectoryUri.update { null }
         persistSelectedDirectories(emptyList())
-        libraryRepository.refresh(
-            forceRefresh = false,
-            bypassVersionCache = true
-        )
+        libraryRepository.refresh(RefreshStrategy.INCREMENTAL)
     }
 
     fun openDirectory(directoryUri: String) {
@@ -656,6 +728,7 @@ class LibraryScanViewModel @Inject constructor(
         forceRefresh: Boolean = false
     ) {
         Timber.d(TAG, "Scanning ${directories.size} directories (incremental=$isIncremental, force=$forceRefresh)")
+        Timber.tag("Voxly").i("DIAG scanSelectedDirectories incremental=$isIncremental force=$forceRefresh")
 
         val dirUris = directories.map { it.uri }.toSet()
         _directoryLoadingState.update { it + dirUris }
@@ -736,22 +809,6 @@ class LibraryScanViewModel @Inject constructor(
 
     private fun sortAudioFiles(
         files: List<AudioFile>,
-        sortOption: FileSortOption
-    ): List<AudioFile> {
-        return when (sortOption) {
-            FileSortOption.NAME_ASC -> files.sortedBy {
-                SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name))
-            }
-            FileSortOption.NAME_DESC -> files.sortedByDescending {
-                SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name))
-            }
-            FileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
-            FileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
-        }
-    }
-
-    private fun sortAudioFiles(
-        files: List<AudioFile>,
         sortOption: DirFileSortOption
     ): List<AudioFile> {
         return when (sortOption) {
@@ -763,14 +820,6 @@ class LibraryScanViewModel @Inject constructor(
             }
             DirFileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
             DirFileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
-        }
-    }
-
-    private fun String.toFileSortOption(): FileSortOption {
-        return try {
-            FileSortOption.valueOf(this)
-        } catch (_: IllegalArgumentException) {
-            FileSortOption.NAME_ASC
         }
     }
 
@@ -893,10 +942,7 @@ class LibraryScanViewModel @Inject constructor(
                 viewModelScope.launch {
                     musicLibraryCache.removeFromCache(filePath)
                 }
-                libraryRepository.refresh(
-                    forceRefresh = false,
-                    bypassVersionCache = true
-                )
+                libraryRepository.refresh(RefreshStrategy.INCREMENTAL)
             }
         }
     }
@@ -925,10 +971,7 @@ class LibraryScanViewModel @Inject constructor(
                 viewModelScope.launch {
                     musicLibraryCache.removeFromCache(filePath)
                 }
-                libraryRepository.refresh(
-                    forceRefresh = false,
-                    bypassVersionCache = true
-                )
+                libraryRepository.refresh(RefreshStrategy.INCREMENTAL)
             }
         }
     }

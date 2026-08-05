@@ -108,6 +108,13 @@ class WhitelistRepositoryImpl @Inject constructor(
         val current = _whitelistDirectories.value.toMutableList()
         if (current.none { it.uri == uri }) {
             current.add(WhitelistDirectory(uri = uri, path = path))
+            // Publish synchronously: filterSettings (and the whitelist filter in
+            // filteredAllAudios) must see the new path before the scan that
+            // refresh() starts writes to the cache, or the freshly scanned files
+            // get filtered out by the stale whitelist (UI shows nothing despite
+            // "scan completed" logs). The DataStore collector below is async and
+            // can lag the scan. Lesson #24.
+            _whitelistDirectories.value = current
             settingsDataStore.setSelectedDirectoryUris(current.map { it.uri })
             Timber.i("$TAG: Added whitelist directory: $path")
         }
@@ -117,6 +124,9 @@ class WhitelistRepositoryImpl @Inject constructor(
         Timber.d("$TAG: removeWhitelistDirectory: $uri")
         val current = _whitelistDirectories.value.toMutableList()
         current.removeAll { it.uri == uri }
+        // Publish synchronously so the filter drops the removed path immediately
+        // (see addWhitelistDirectory — lesson #24).
+        _whitelistDirectories.value = current
         settingsDataStore.setSelectedDirectoryUris(current.map { it.uri })
         Timber.i("$TAG: Removed whitelist directory: $uri")
     }
@@ -132,6 +142,8 @@ class WhitelistRepositoryImpl @Inject constructor(
         val current = _blacklistDirectories.value.toMutableList()
         if (current.none { it.uri == uri }) {
             current.add(WhitelistDirectory(uri = uri, path = path))
+            // Publish synchronously (see addWhitelistDirectory — lesson #24).
+            _blacklistDirectories.value = current
             settingsDataStore.setBlacklistDirectoryUris(current.map { it.uri })
             Timber.i("$TAG: Added blacklist directory: $path")
         }
@@ -141,6 +153,8 @@ class WhitelistRepositoryImpl @Inject constructor(
         Timber.d("$TAG: removeBlacklistDirectory: $uri")
         val current = _blacklistDirectories.value.toMutableList()
         current.removeAll { it.uri == uri }
+        // Publish synchronously (see addWhitelistDirectory — lesson #24).
+        _blacklistDirectories.value = current
         settingsDataStore.setBlacklistDirectoryUris(current.map { it.uri })
         Timber.i("$TAG: Removed blacklist directory: $uri")
     }

@@ -28,8 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 sealed class LibraryChangeEvent {
     data class Global(
-        val forceRefresh: Boolean = false,
-        val bypassVersionCache: Boolean = false
+        val strategy: RefreshStrategy = RefreshStrategy.LAZY
     ) : LibraryChangeEvent()
 
     data class Directory(
@@ -96,14 +95,8 @@ class LibraryDataHolder @Inject constructor() {
         }
     }
 
-    /**
-     * Request a whole-library refresh (full when [forceRefresh], else incremental).
-     */
-    fun requestGlobalRefresh(
-        forceRefresh: Boolean = false,
-        bypassVersionCache: Boolean = false
-    ) {
-        _changeEvents.tryEmit(LibraryChangeEvent.Global(forceRefresh, bypassVersionCache))
+    fun requestGlobalRefresh(strategy: RefreshStrategy = RefreshStrategy.LAZY) {
+        _changeEvents.tryEmit(LibraryChangeEvent.Global(strategy))
     }
 
     /** Request an incremental scan of a single directory (merged by the consumer). */

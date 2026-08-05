@@ -53,6 +53,7 @@ class MusicLibraryCache @Inject constructor(
     private val artistLinkDao: ArtistLinkDao by lazy { database.artistLinkDao() }
     private val enrichmentJobDao: EnrichmentJobDao by lazy { database.enrichmentJobDao() }
     private val directorySnapshotDao: DirectorySnapshotDao by lazy { database.directorySnapshotDao() }
+    private val aggregateSnapshotDao: AggregateSnapshotDao by lazy { database.aggregateSnapshotDao() }
 
     private val cacheVersion = MutableStateFlow(0L)
     val cacheVersionFlow: StateFlow<Long> = cacheVersion.asStateFlow()
@@ -143,8 +144,13 @@ class MusicLibraryCache @Inject constructor(
      */
     fun isWarm(): Boolean = wasWarmedUp
 
+    /** True when the in-memory hot cache already holds files (materialized by any read). */
+    fun hasHotCache(): Boolean = synchronized(hotCacheLock) {
+        !hotAudioFiles.isNullOrEmpty()
+    }
+
     // ==================== Audio File Cache Operations ====================
-    
+
     /**
      * Gets all cached audio files as a Flow for reactive UI updates.
      */
@@ -204,6 +210,24 @@ class MusicLibraryCache @Inject constructor(
     suspend fun getCachedFileCount(): Int = withContext(Dispatchers.IO) {
         audioFileDao.getCachedFileCount()
     }
+
+    /**
+     * Paths of cached files missing core metadata (year, sampleRate, or album) —
+     * the backfill candidate set. SQL-side predicate; no full-library load.
+     */
+    suspend fun getPathsMissingMetadata(): List<String> = withContext(Dispatchers.IO) {
+        audioFileDao.getPathsMissingMetadata()
+    }
+
+    /** Full entities for a bounded set of paths (backfill candidates). */
+    suspend fun getAudioFilesByPaths(paths: List<String>): List<AudioFile> = withContext(Dispatchers.IO) {
+        if (paths.isEmpty()) emptyList() else audioFileDao.getAudioFilesByPaths(paths).map { it.toAudioFile() }
+    }
+
+    /** Full-text search via FTS4. Returns matching [AudioFile]s sorted by title. */
+    fun searchFiles(query: String): Flow<List<AudioFile>> {
+        return audioFileDao.searchAudioFiles(query).map { entities -> entities.map { it.toAudioFile() } }
+    }
     
     /**
      * Gets the last scan timestamp.
@@ -216,7 +240,38 @@ class MusicLibraryCache @Inject constructor(
      * Checks if cache has any data.
      */
     suspend fun hasCache(): Boolean = withContext(Dispatchers.IO) {
-        audioFileDao.hasCache()
+        val r = audioFileDao.hasCache()
+        Timber.i(TAG, "DIAG hasCache()=$r")
+        r
+    }
+
+    /**
+     * Deterministic fingerprint of the cached rows (count + max write time +
+     * max file mtime). Validates [AggregateSnapshotEntity] freshness.
+     */
+    suspend fun getContentFingerprint(): String = withContext(Dispatchers.IO) {
+        audioFileDao.getContentFingerprint()
+    }
+
+    /** Persists the serialized aggregate snapshot under a content fingerprint. */
+    suspend fun saveAggregateSnapshot(
+        fingerprint: String,
+        albumsJson: String,
+        artistsJson: String
+    ) = withContext(Dispatchers.IO) {
+        aggregateSnapshotDao.saveSnapshot(
+            AggregateSnapshotEntity(
+                fingerprint = fingerprint,
+                albumsJson = albumsJson,
+                artistsJson = artistsJson,
+                savedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    /** Loads the last persisted aggregate snapshot; null when none exists. */
+    suspend fun loadAggregateSnapshot(): AggregateSnapshotEntity? = withContext(Dispatchers.IO) {
+        aggregateSnapshotDao.getSnapshot()
     }
     
     /**
@@ -263,7 +318,22 @@ class MusicLibraryCache @Inject constructor(
             }
         }
 
-        invalidateHotCache()
+        // Merge into the in-memory hot cache when it is already resident so the
+        // next full read doesn't re-materialize the whole library from Room. The
+        // hot cache is only the pre-warm mapping; on a cold start it's re-read
+        // from the DB (which the batch write has just updated).
+        val audioFileByPath = audioFiles.associateBy { normalizedPath(it.path) }
+        synchronized(hotCacheLock) {
+            val existing = hotAudioFiles
+            if (existing != null) {
+                val merged = LinkedHashMap<String, AudioFile>(existing.size + audioFileByPath.size)
+                existing.forEach { f -> if (f.path !in audioFileByPath) merged[f.path] = f }
+                merged.putAll(audioFileByPath)
+                hotAudioFiles = merged.values.toList()
+            } else {
+                hotAudioFiles = null
+            }
+        }
 
         val albumKeys = audioFiles.mapNotNull { CacheChangeKeys.extractAlbumKey(it) }.toSet()
         _changeFlow.tryEmit(
@@ -451,6 +521,7 @@ class MusicLibraryCache @Inject constructor(
             audioFileDao.deleteAll()
             albumThumbnailDao.deleteAll()
             artistLinkDao.deleteAll()
+            aggregateSnapshotDao.deleteAll()
             invalidateHotCache()
             bumpCacheVersion()
             wasWarmedUp = false
@@ -461,17 +532,43 @@ class MusicLibraryCache @Inject constructor(
     // ==================== Incremental Scan Support ====================
     
     /**
+     * All cached (path, mtime) pairs in one batch query.
+     *
+     * Loaded ONCE per incremental scan and reused by both the per-directory
+     * MediaStore-completeness check and [getFilesNeedingRescan], so the
+     * full-table mtime projection is never queried twice per scan (it is also
+     * much cheaper than the per-directory File stat walk it replaces).
+     */
+    suspend fun getCachedPathsWithModificationTimes(): List<Pair<String, Long>> = withContext(Dispatchers.IO) {
+        audioFileDao.getFilePathsWithModificationTimes().map { it.path to it.fileLastModifiedAt }
+    }
+
+    /**
      * Gets files that need rescanning based on modification times.
-     * Compares modification times directly (both in milliseconds).
+     * Compares modification times directly (both in milliseconds) with a
+     * 1s tolerance: mtimes can arrive via different sources (File.lastModified,
+     * SAF DocumentFile.lastModified, MediaStore DATE_MODIFIED*1000) whose
+     * precision/rounding differs, and a sub-second jitter must not re-read a
+     * file that is actually unchanged. Real edits move mtime by >> 1s.
      */
     suspend fun getFilesNeedingRescan(currentFiles: List<Pair<String, Long>>): List<String> =
+        getFilesNeedingRescan(currentFiles, getCachedPathsWithModificationTimes())
+
+    /**
+     * Same as [getFilesNeedingRescan], but takes the cached (path, mtime) map
+     * from the caller — used by [DirectoryScanStrategy] which already loaded it
+     * once for the completeness check.
+     */
+    suspend fun getFilesNeedingRescan(
+        currentFiles: List<Pair<String, Long>>,
+        cachedPathsWithMtimes: List<Pair<String, Long>>
+    ): List<String> =
         withContext(Dispatchers.IO) {
-            val cachedFiles = audioFileDao.getFilePathsWithModificationTimes()
-            val cachedMap = cachedFiles.associate { it.path to it.fileLastModifiedAt }
+            val cachedMap = cachedPathsWithMtimes.toMap()
 
             currentFiles.filter { (path, lastModified) ->
                 val cached = cachedMap[path]
-                cached == null || cached != lastModified
+                cached == null || kotlin.math.abs(cached - lastModified) > 1_000L
             }.map { it.first }
         }
     
@@ -493,16 +590,39 @@ class MusicLibraryCache @Inject constructor(
     
     /**
      * Cleans up deleted files from cache.
+     *
+     * Purges cached rows whose paths are no longer in [currentPaths] (the
+     * MediaStore path set) — EXCEPT files inside user-selected (whitelist)
+     * directories: those trees may hold files MediaStore doesn't index (USB/SD
+     * volumes, files added but not yet indexed), so a global path-only purge
+     * would wrongly delete valid entries. Deletions inside selected dirs are
+     * handled by the per-directory incremental scan, which walks the actual
+     * filesystem. Lesson #24.
      */
     suspend fun cleanupDeletedFiles(currentPaths: List<String>): Int = withContext(Dispatchers.IO) {
-        val normalizedPaths = currentPaths.map { normalizedPath(it) }
-        val deletedCount = audioFileDao.deleteNotInPaths(normalizedPaths)
-        artistLinkDao.deleteNotInTrackIds(normalizedPaths)
-        if (deletedCount > 0) {
-            invalidateHotCache()
-            bumpCacheVersion()
+        val normalizedPaths = currentPaths.map { normalizedPath(it) }.toSet()
+
+        // Selected dirs (whitelist) — normalized at the persistence boundary so
+        // prefix matching is consistent with how cached paths are stored.
+        val protectedPaths = settingsDataStore.selectedDirectoryUris.first()
+            .mapNotNull { uriString -> runCatching { Uri.parse(uriString) }.getOrNull() }
+            .mapNotNull { uri -> runCatching { PathUtils.getPathFromUri(uri) }.getOrNull() }
+            .map { normalizedPath(it) }
+            .toSet()
+
+        val cachedPaths = audioFileDao.getFilePathsWithModificationTimes().map { it.path }
+        val stalePaths = cachedPaths.filter { path ->
+            path !in normalizedPaths && protectedPaths.none { protected ->
+                path == protected || path.startsWith("$protected/")
+            }
         }
-        deletedCount
+        if (stalePaths.isEmpty()) return@withContext 0
+        audioFileDao.deleteByPaths(stalePaths)
+        artistLinkDao.deleteByTrackIds(stalePaths)
+        invalidateHotCache()
+        bumpCacheVersion()
+        Timber.i(TAG, "DB cleanup: deleted ${stalePaths.size} stale files")
+        stalePaths.size
     }
 
     internal fun bumpCacheVersion() {

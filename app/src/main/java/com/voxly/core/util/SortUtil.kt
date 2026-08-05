@@ -26,6 +26,18 @@ object SortUtil {
     }
 
     /**
+     * ICU transliterator for Han→Latin conversion. Creating one per call is
+     * expensive (parses rule tables); hoisting to a singleton makes the 1000+
+     * pinyin sorts during initial aggregation cheap.
+     */
+    private val hanLatinTransliterator: Transliterator? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try { Transliterator.getInstance("Han-Latin; Latin-Ascii") } catch (e: Exception) { null }
+        } else {
+            null
+        }
+
+    /**
      * Converts a string to a sortable pinyin representation.
      *
      * - English letters: kept as-is (lowercased)
@@ -45,11 +57,10 @@ object SortUtil {
         pinyinCache[input]?.let { return it }
 
         val result = try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val transliterator = Transliterator.getInstance("Han-Latin; Latin-Ascii")
-                transliterator.transliterate(input).lowercase()
+            if (hanLatinTransliterator != null) {
+                hanLatinTransliterator.transliterate(input).lowercase()
             } else {
-                input.lowercase() // API < 29 回退
+                input.lowercase() // API < 29 或初始化失败回退
             }
         } catch (e: Exception) {
             input.lowercase()

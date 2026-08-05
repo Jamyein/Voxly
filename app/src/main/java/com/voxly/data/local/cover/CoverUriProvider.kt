@@ -163,9 +163,12 @@ class CoverUriProvider @Inject constructor(
     }
     
     companion object {
-        private const val MAX_URI_EXISTS_CACHE = 200
-        private const val MAX_FOLDER_COVER_CACHE = 200
-        private const val MAX_EMBEDDED_COVER_CACHE = 100
+        // Sized for 10k+ track libraries: these caches hold only booleans / Uri
+        // references (no decoded bytes), so large capacities are cheap and stop
+        // repeated MediaMetadataRetriever extraction while scrolling a big grid.
+        private const val MAX_URI_EXISTS_CACHE = 5000
+        private const val MAX_FOLDER_COVER_CACHE = 5000
+        private const val MAX_EMBEDDED_COVER_CACHE = 3000
         private val albumArtUriCompanion = Uri.parse("content://media/external/audio/albumart")
 
         private val uriExistsCache = LinkedHashMap<Uri, Boolean>(MAX_URI_EXISTS_CACHE, 0.75f, true)

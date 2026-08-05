@@ -8,6 +8,7 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.scanner.MediaStoreDataSource
 import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.RefreshStrategy
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import timber.log.Timber
@@ -40,10 +41,7 @@ class LibraryPeriodicScanWorker @AssistedInject constructor(
         return try {
             // 1. Trigger an incremental scan. The scan path skips deletion
             //    detection; we do it here afterward.
-            libraryRepository.refresh(
-                forceRefresh = false,
-                bypassVersionCache = false
-            )
+            libraryRepository.refresh(RefreshStrategy.LAZY)
 
             // 2. Deletion cleanup: fast path-only query to find files no
             //    longer known to MediaStore, then purge from cache.

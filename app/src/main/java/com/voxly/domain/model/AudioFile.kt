@@ -264,6 +264,8 @@ data class AlbumGroup(
     val name: String,
     val albumArtist: String?,
     val files: ImmutableList<AudioFile>,
+    /** Precomputed pinyin collation key — deterministic f(name), set once at group build. */
+    val sortKey: String,
     val coverPath: String? = null,
     val year: Int? = null
 )

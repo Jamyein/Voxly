@@ -15,8 +15,8 @@ import androidx.work.WorkManager
 import com.voxly.data.local.worker.EnrichmentWorker
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
+import com.voxly.domain.model.ArtistListItemState
 import com.voxly.domain.model.AudioFile
-import com.voxly.domain.model.IncrementalList
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.flowOn
@@ -83,6 +84,7 @@ class AudioFileScanner @Inject constructor(
     private val filterEngine: FilterEngine,
     private val scanFilterProvider: ScanFilterProvider,
     private val albumArtistAggregator: AlbumArtistAggregator,
+    private val uiStateDataStore: UiStateDataStore,
     // Scan strategies
     private val globalScanStrategy: com.voxly.data.local.scanner.GlobalScanStrategy,
     private val incrementalScanStrategy: com.voxly.data.local.scanner.IncrementalScanStrategy,
@@ -91,10 +93,6 @@ class AudioFileScanner @Inject constructor(
 ) {
     companion object {
         private const val TAG = "AudioFileScanner"
-
-        /** Timeout for WhileSubscribed on cachedAudioFilesStateFlow. Keeps the upstream
-         *  Room flow warm across screen navigations without holding it forever. */
-        private const val STATE_FLOW_TIMEOUT_MS = 5_000L
 
         /** Collator for Chinese pinyin sorting */
         private val chineseCollator = SortUtil.chineseCollator
@@ -105,55 +103,127 @@ class AudioFileScanner @Inject constructor(
 
     // Delegate albums/artists to aggregator
     val albums: StateFlow<List<AlbumGroup>> = albumArtistAggregator.albums
-    val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = albumArtistAggregator.albumsBySort
     val artists: StateFlow<List<ArtistGroup>> = albumArtistAggregator.artists
-    val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = albumArtistAggregator.albumDiff
-    val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = albumArtistAggregator.artistDiff
 
     /**
      * The single filtered library for display (Files page, Songs, search).
      * Raw cache + live whitelist/blacklist/min-duration settings, maintained by
-     * the aggregator. Consumers must read this flow, NOT the raw
-     * [cachedAudioFilesStateFlow].
+     * the aggregator. Consumers must read this flow, NOT the raw cache.
      */
     val filteredAllAudios: StateFlow<List<AudioFile>> = albumArtistAggregator.filteredAllAudios
 
-    private val scanMutex = Mutex()
+    /** True once the aggregator's initial build finished (cache or empty). */
+    val libraryInitialized: StateFlow<Boolean> = albumArtistAggregator.isInitialized
 
-    // Raw cached audio files from database (cold Flow; see [cachedAudioFilesStateFlow]
-    // for the hot StateFlow variant recommended for UI subscribers).
-    @Deprecated(
-        "Cold Flow triggers re-mapping on each subscription. Use cachedAudioFilesStateFlow for UI consumers."
-    )
-    val cachedAudioFilesFlow: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
-        .catch { e ->
-            Timber.e(e, "Error observing cached audio files")
-        }
+    // ─── Display-ready projections (unified pattern) ─────────────────────
+    // Every screen-facing list below is a pure projection of the aggregator's
+    // StateFlows, Eagerly started on the APPLICATION scope. They are hot and
+    // correct BEFORE the user navigates anywhere, so no screen ever renders an
+    // empty initial frame (the pre-unification flash: VMs re-wrapped the same
+    // flows with stateIn(WhileSubscribed, emptyList) and were created lazily on
+    // first navigation). ViewModels expose these directly without re-wrapping;
+    // sorting/UI-pref transforms live next to their data source. The Eagerly
+    // collectors also pre-warm UiStateDataStore at app start, so every
+    // DataStore-backed combine emits within a frame.
 
     /**
-     * Hot [StateFlow] view of [cachedAudioFilesFlow] backed by `applicationScope`.
+     * Albums selected by the persisted sort option.
      *
-     * RAW, unfiltered: this is every audio file the scans have collected, NOT
-     * what the library displays. UI consumers must read [filteredAllAudios]
-     * instead so whitelist/blacklist/min-duration settings apply uniformly.
-     *
-     * Files/Albums/Artists screens all subscribe through this flow instead of
-     * a cold Flow, so Room emissions fan out to multiple collectors without
-     * re-running the entity-to-AudioFile mapping on every subscription. The
-     * `WhileSubscribed(5s)` policy keeps the upstream warm across screen
-     * navigations but tears it down once the library leaves the foreground for
-     * a meaningful interval — prevents the in-process Room Flow from holding
-     * large lists in memory permanently.
+     * Derived from the aggregator's canonical NAME_ASC list on demand: sortKey is
+     * precomputed on AlbumGroup at build time, so the active option's sort is
+     * sub-ms field compares, executed on the Default dispatcher. There is no
+     * cached sort-order snapshot — the aggregator maintains only the identity
+     * map + canonical list, so this projection cannot go stale.
      */
-    val cachedAudioFilesStateFlow: StateFlow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
-        .catch { e ->
-            Timber.e(e, "Error observing cached audio files")
+    val sortedAlbums: StateFlow<List<AlbumGroup>> = combine(
+        albumArtistAggregator.albums,
+        uiStateDataStore.albumSortOption
+    ) { albums, currentOption ->
+        val option = try {
+            AlbumSortOption.valueOf(currentOption)
+        } catch (e: IllegalArgumentException) {
+            AlbumSortOption.NAME_ASC
         }
+        when (option) {
+            AlbumSortOption.NAME_ASC -> albums
+            AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedWith(
+                compareByDescending<AlbumGroup> { it.files.size }.thenBy { it.sortKey }
+            )
+            AlbumSortOption.YEAR_DESC -> albums.sortedWith(
+                compareByDescending<AlbumGroup> { it.year ?: Int.MIN_VALUE }.thenBy { it.sortKey }
+            )
+        }
+    }.flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
         .stateIn(
             scope = applicationScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            started = SharingStarted.Eagerly,
             initialValue = emptyList()
         )
+
+    /** All audios sorted by the persisted file-browser sort option. */
+    val sortedAllAudios: StateFlow<List<AudioFile>> = combine(
+        filteredAllAudios,
+        uiStateDataStore.fileBrowserSortOption.map { toFileSortOption(it) }
+    ) { audios, sortOption ->
+        sortAudioFiles(audios, sortOption)
+    }.flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+        .stateIn(
+            scope = applicationScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
+
+    /**
+     * Artist list items for the Artists screen (grouped by display name with
+     * per-artist cover/album/track stats). Moved from ArtistViewModel so the
+     * mapping runs once at app level instead of on every tab re-entry.
+     */
+    val artistListItems: StateFlow<List<ArtistListItemState>> = albumArtistAggregator.artists
+        .map { artistGroups ->
+            artistGroups
+                .groupBy { it.name }
+                .map { (name, groups) ->
+                    val first = groups.first()
+                    val albumNames = groups.flatMap { it.files }
+                        .mapNotNull { it.metadata.album }
+                        .filter { it.isNotBlank() }
+                        .toSet()
+                    val coverFile = groups.flatMap { it.files }
+                        .firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    ArtistListItemState(
+                        name = name,
+                        coverPath = first.coverPath,
+                        coverAlbumId = coverFile?.mediaStoreAlbumId,
+                        albumCount = albumNames.size,
+                        trackCount = groups.sumOf { it.files.size }
+                    )
+                }
+                .sortedBy { SortUtil.toSortablePinyin(it.name) }
+        }
+        .flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+        .stateIn(
+            scope = applicationScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
+
+    private fun sortAudioFiles(files: List<AudioFile>, sortOption: FileSortOption): List<AudioFile> {
+        return when (sortOption) {
+            FileSortOption.NAME_ASC -> files.sortedBy {
+                SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name))
+            }
+            FileSortOption.NAME_DESC -> files.sortedByDescending {
+                SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name))
+            }
+            FileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
+            FileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
+        }
+    }
+
+    private val scanMutex = Mutex()
 
     /**
      * Get cached audio files (from Room database).
@@ -166,11 +236,11 @@ class AudioFileScanner @Inject constructor(
      * Uses warmup state to skip redundant DB queries if warmup already succeeded.
      */
     suspend fun hasCachedData(): Boolean {
-        if (libraryCache.isWarm()) {
-            val count = libraryCache.getCachedFileCount()
-            Timber.d(TAG, "hasCachedData: warm cache confirmed, $count files")
-            return count > 0
-        }
+        // Materialized hot cache (set by any cache read, e.g. the aggregator's
+        // kickOffInitialBuild) is authoritative. Relying only on wasWarmedUp is
+        // racy on cold start: warmUp() may not have finished when loadAudioFiles
+        // runs, even though the cache was already loaded into memory.
+        if (libraryCache.isWarm() || libraryCache.hasHotCache()) return true
         return libraryCache.hasCache()
     }
 
@@ -317,17 +387,17 @@ class AudioFileScanner @Inject constructor(
     private fun scheduleMetadataBackfill() {
         applicationScope.launch {
             try {
-                val cached = libraryCache.getCachedAudioFilesOnce()
-                val needsEnrichment = cached.filter { audioFile ->
-                    audioFile.metadata.year.isNullOrBlank() ||
-                        audioFile.sampleRate == 0 ||
-                        audioFile.metadata.album.isNullOrBlank()
-                }
-                if (needsEnrichment.isEmpty()) {
+                // SQL-side predicate: only paths missing year/sampleRate/album come
+                // back, instead of loading the whole library into memory and
+                // filtering in Kotlin.
+                val missingPaths = libraryCache.getPathsMissingMetadata()
+                if (missingPaths.isEmpty()) {
                     Timber.d(TAG, "No files need year/sampleRate/album backfill")
                     return@launch
                 }
 
+                // Materialize only the candidate rows (bounded by the SQL predicate).
+                val needsEnrichment = libraryCache.getAudioFilesByPaths(missingPaths)
                 val filtered = filterEngine.applyFilters(
                     needsEnrichment,
                     scanFilterProvider.current()
@@ -338,15 +408,12 @@ class AudioFileScanner @Inject constructor(
                     return@launch
                 }
 
-                // Only enqueue files that don't already have a pending job
-                val pathsToEnqueue = filtered
-                    .map { it.path }
-                    .filter { path -> !libraryCache.hasEnrichmentJobForPath(path) }
-
-                if (pathsToEnqueue.isNotEmpty()) {
-                    libraryCache.enqueueEnrichmentJobs(pathsToEnqueue)
-                    Timber.d(TAG, "Enqueued ${pathsToEnqueue.size} files for metadata backfill")
-                }
+                // enqueueEnrichmentJobs uses INSERT ... ON CONFLICT IGNORE, so
+                // re-enqueueing a path that already has a pending job is a no-op
+                // — no per-path EXISTS check needed.
+                val pathsToEnqueue = filtered.map { it.path }
+                libraryCache.enqueueEnrichmentJobs(pathsToEnqueue)
+                Timber.d(TAG, "Enqueued ${pathsToEnqueue.size} files for metadata backfill")
 
                 // Trigger WorkManager (existing policy keeps only one active worker)
                 val workRequest = OneTimeWorkRequestBuilder<EnrichmentWorker>()
@@ -367,5 +434,17 @@ class AudioFileScanner @Inject constructor(
      */
     fun cleanup() {
         // No-op: ApplicationScope is managed at app level
+    }
+}
+
+/**
+ * Shared parse helper: persisted FileSortOption string -> enum, defaulting to
+ * NAME_ASC on unknown values (forward-compatible with older stored prefs).
+ */
+fun toFileSortOption(value: String): FileSortOption {
+    return try {
+        FileSortOption.valueOf(value)
+    } catch (_: IllegalArgumentException) {
+        FileSortOption.NAME_ASC
     }
 }

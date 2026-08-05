@@ -166,12 +166,94 @@ class MediaStoreDataSource @Inject constructor(
     }
 
     /**
-     * Query directory file paths and modification times for incremental scanning.
+     * Result of enumerating a directory tree: whether the tree was fully
+     * readable and the audio files found inside it.
+     *
+     * Callers MUST NOT treat an inaccessible tree as "empty": an unreadable
+     * directory (scoped-storage File-walk failure, missing SAF tree URI) would
+     * otherwise make every cached file inside it look "deleted", triggering a
+     * purge of valid entries. Lesson #24.
      */
-    fun queryDirectoryFilePathsAndModificationTimes(directory: File): List<Pair<String, Long>> {
+    data class DirectoryFileListing(
+        val accessible: Boolean,
+        val files: List<Pair<String, Long>>
+    )
+
+    /**
+     * Query directory file paths and modification times by walking the actual
+     * filesystem. This is the authoritative fallback enumeration: it sees every
+     * audio-extension file on disk, indexed by MediaStore or not (USB/SD
+     * volumes, unindexed trees — lesson #24).
+     */
+    fun queryDirectoryFilePathsAndModificationTimes(directory: File): DirectoryFileListing {
         val output = mutableListOf<Pair<String, Long>>()
-        collectDirectoryFileModificationTimes(directory, output)
-        return output
+        val accessible = collectDirectoryFileModificationTimes(directory, output)
+        return DirectoryFileListing(accessible = accessible, files = output)
+    }
+
+    /**
+     * MediaStore-indexed path enumeration of a primary-storage directory
+     * subtree (RELATIVE_PATH range query), with mtimes re-statted from the
+     * real filesystem. Returns null when the directory is not under primary
+     * external storage (MediaStore cannot scope the query to it) or the query
+     * yields no live files — both signal "walk the filesystem instead".
+     */
+    fun queryDirectoryPathsAndMtimesViaMediaStore(directory: File): DirectoryFileListing? {
+        val relativePath = getRelativePathFromAbsolute(directory.absolutePath) ?: return null
+        // Empty relative path means the storage root was selected — a
+        // `LIKE '%'` would match the ENTIRE audio collection, not just this
+        // tree. Root-directory whitelists are handled by the filesystem walk
+        // (same as the full-scan path).
+        if (relativePath.isBlank()) return null
+        val files = mutableListOf<Pair<String, Long>>()
+        val selection = buildString {
+            append("${MediaStore.Audio.Media.RELATIVE_PATH} = ?")
+            append(" OR ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?")
+        }
+        val selectionArgs = arrayOf(relativePath, "$relativePath%")
+        contentResolver.query(
+            AUDIO_URI,
+            arrayOf(
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.RELATIVE_PATH
+            ),
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val relativeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+            while (cursor.moveToNext()) {
+                val displayName = cursor.getString(nameCol) ?: continue
+                val relative = cursor.getString(relativeCol)
+                val extension = displayName.substringAfterLast('.', "").lowercase()
+                if (extension !in AUDIO_EXTENSIONS) continue
+                val path = buildPathFromRelativePath(relative, displayName)
+                // mtime must be like-for-like with the cache, which stores
+                // File.lastModified() millis (lesson #27). MediaStore's
+                // DATE_MODIFIED is second-precision AND lags external edits
+                // until its scanner observes them — a diff against it would
+                // silently miss edits (and a sub-second truncation is a
+                // non-issue thanks to the 1s tolerance). Re-stat the real path
+                // (µs per file); DATE_MODIFIED is only a fallback for the
+                // rare genuinely-unstatable file.
+                val mtime = File(path).lastModified()
+                if (mtime <= 0L) {
+                    // File gone from disk (MediaStore row stale) — skip it so
+                    // the caller's purge sees it as deleted instead of keeping
+                    // a phantom row in currentFiles (deletion latency is the
+                    // whole point of the incremental scan, lesson #14).
+                    continue
+                }
+                files.add(path to mtime)
+            }
+        }
+        // Empty result is ambiguous (genuinely empty vs unindexed tree) — let
+        // the caller fall back to the filesystem walk rather than risk treating
+        // an unindexed tree as "empty" (lesson #24: never purge against an
+        // inaccessible/unknown tree).
+        if (files.isEmpty()) return null
+        return DirectoryFileListing(accessible = true, files = files)
     }
 
     /**
@@ -288,42 +370,70 @@ class MediaStoreDataSource @Inject constructor(
     }
 
     /**
-     * Query file paths and modification times via SAF DocumentFile API when File.listFiles() returns empty.
+     * Query file paths and modification times via SAF DocumentFile API when
+     * File.listFiles() returns empty.
+     *
+     * Returns [DirectoryFileListing] so callers can distinguish "tree exists but
+     * empty" (accessible, safe to purge against) from "no tree URI / unusable"
+     * (inaccessible, must NOT purge — see [DirectoryFileListing] KDoc).
      */
-    fun queryDirectoryViaSaf(directoryPath: String): List<Pair<String, Long>> {
+    fun queryDirectoryViaSaf(directoryPath: String): DirectoryFileListing {
         val treeUri = safWriteAccessService.findTreeUriForPath(directoryPath)
             ?: run {
                 Timber.w(TAG, "No TreeUri found for path: $directoryPath")
-                return emptyList()
+                return DirectoryFileListing(accessible = false, files = emptyList())
             }
 
         val documentFile = DocumentFile.fromTreeUri(context, treeUri)
             ?: run {
                 Timber.w(TAG, "Cannot create DocumentFile from TreeUri: $treeUri")
-                return emptyList()
+                return DirectoryFileListing(accessible = false, files = emptyList())
             }
 
         val result = mutableListOf<Pair<String, Long>>()
-        collectDocumentFilesViaSafRecursive(documentFile, result)
+        val accessible = collectDocumentFilesViaSafRecursive(documentFile, result)
         Timber.d(TAG, "SAF query found ${result.size} audio files in $directoryPath")
-        return result
+        return DirectoryFileListing(accessible = accessible, files = result)
     }
 
-    private fun collectDocumentFilesViaSafRecursive(docFile: DocumentFile, output: MutableList<Pair<String, Long>>) {
-        docFile.listFiles().forEach { child ->
-            when {
-                child.isDirectory -> collectDocumentFilesViaSafRecursive(child, output)
-                child.isFile -> {
-                    val name = child.name
-                    if (name != null && name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS) {
-                        val path = getPathFromDocumentUri(child.uri)
-                        if (path != null) {
-                            output.add(path to child.lastModified())
+    private fun collectDocumentFilesViaSafRecursive(
+        docFile: DocumentFile,
+        output: MutableList<Pair<String, Long>>
+    ): Boolean {
+        val children = runCatching { docFile.listFiles() }.getOrNull() ?: return false
+        var accessible = true
+        children.forEach { child ->
+            runCatching {
+                when {
+                    child.isDirectory -> {
+                        if (!collectDocumentFilesViaSafRecursive(child, output)) accessible = false
+                    }
+                    child.isFile -> {
+                        val name = child.name
+                        if (name != null && name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS) {
+                            val path = getPathFromDocumentUri(child.uri)
+                            if (path != null) {
+                                // Use the real filesystem mtime, NOT
+                                // DocumentFile.lastModified(): the SAF provider's
+                                // value can have a different precision/rounding
+                                // than File.lastModified(), which would make every
+                                // cached mtime "differ" and force a full TagLib
+                                // re-read on the next incremental launch (the
+                                // cache stores File-based mtimes). Lesson #26.
+                                val mtime = File(path).lastModified()
+                                    .takeIf { it > 0L }
+                                    ?: child.lastModified()
+                                output.add(path to mtime)
+                            }
                         }
                     }
                 }
+            }.onFailure {
+                Timber.w(TAG, "SAF document access failed: ${docFile.uri}", it)
+                accessible = false
             }
         }
+        return accessible
     }
 
     private suspend fun scanDocumentFilesRecursive(docFile: DocumentFile, output: MutableList<AudioFile>) {
@@ -750,21 +860,35 @@ class MediaStoreDataSource @Inject constructor(
 
     /**
      * Collect file modification times from directory recursively.
+     *
+     * @return true when the whole tree was readable; false when the directory is
+     *   missing/unreadable or any file/subdirectory could not be enumerated
+     *   (scoped-storage listFiles()==null, unreadable file). Callers use this to
+     *   decide whether an empty result means "no audio files" (safe to purge)
+     *   or "couldn't look" (must NOT purge). Lesson #24.
      */
     private fun collectDirectoryFileModificationTimes(
         directory: File,
         output: MutableList<Pair<String, Long>>
-    ) {
-        if (!directory.exists() || !directory.isDirectory) return
-
-        directory.listFiles()?.forEach { file ->
+    ): Boolean {
+        if (!directory.exists() || !directory.isDirectory) return false
+        val children = directory.listFiles() ?: return false
+        var accessible = true
+        children.forEach { file ->
             when {
-                file.isDirectory -> collectDirectoryFileModificationTimes(file, output)
-                file.extension.lowercase() in AUDIO_EXTENSIONS && file.canRead() -> {
-                    output.add(file.absolutePath to file.lastModified())
+                file.isDirectory -> {
+                    if (!collectDirectoryFileModificationTimes(file, output)) accessible = false
+                }
+                file.extension.lowercase() in AUDIO_EXTENSIONS -> {
+                    if (file.canRead()) {
+                        output.add(file.absolutePath to file.lastModified())
+                    } else {
+                        accessible = false
+                    }
                 }
             }
         }
+        return accessible
     }
 
     /**

@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import com.voxly.data.local.SafTreeWatcher
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.RefreshStrategy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
@@ -96,10 +97,7 @@ class MediaStoreChangeWatcher @Inject constructor(
                 .debounce(DEBOUNCE_MS)
                 .collect {
                     Timber.tag(TAG).d("MediaStore change → global refresh → SAF walk")
-                    libraryRepository.refresh(
-                        forceRefresh = false,
-                        bypassVersionCache = true
-                    )
+                    libraryRepository.refresh(RefreshStrategy.INCREMENTAL)
 
                     // Phase 4: detect changes in SAF-picked directories that
                     // MediaStore observer doesn't cover (USB drives, SD roots).

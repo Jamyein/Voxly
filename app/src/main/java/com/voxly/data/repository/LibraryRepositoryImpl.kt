@@ -2,20 +2,18 @@ package com.voxly.data.repository
 
 import com.voxly.core.util.Constants
 import com.voxly.data.local.AudioFileScanner
-import com.voxly.data.local.MediaStoreVersionCache
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
-import com.voxly.domain.model.IncrementalList
 import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.RefreshStrategy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -51,7 +49,6 @@ class LibraryRepositoryImpl @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
     private val musicLibraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
-    private val mediaStoreVersionCache: MediaStoreVersionCache,
     @Named("ApplicationScope") private val scope: CoroutineScope,
 ) : LibraryRepository {
 
@@ -62,10 +59,10 @@ class LibraryRepositoryImpl @Inject constructor(
     // Flag to prevent duplicate settings watching
     private var isWatchingSettings = false
 
-    // Settings change tracking
-    private var lastMinDurationFilterEnabled = false
-    private var lastWhitelistEnabled = false
-    private var lastBlacklistEnabled = false
+    // Settings change tracking (null = baseline not yet established)
+    private var lastMinDurationFilterEnabled: Boolean? = null
+    private var lastWhitelistEnabled: Boolean? = null
+    private var lastBlacklistEnabled: Boolean? = null
 
     override val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
     override val scanError: SharedFlow<String> = libraryDataHolder.scanError
@@ -78,33 +75,21 @@ class LibraryRepositoryImpl @Inject constructor(
     override val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAllAudios
     override val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
     override val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
-    override val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = audioFileScanner.albumDiff
-    override val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = audioFileScanner.artistDiff
 
-    override fun refresh(
-        forceRefresh: Boolean,
-        bypassVersionCache: Boolean,
-    ) {
+    override fun refresh(strategy: RefreshStrategy) {
+        Timber.tag("Voxly").i("DIAG refresh($strategy) from=${Thread.currentThread().stackTrace.getOrNull(4)?.let { "${it.className.substringAfterLast('.')}.${it.methodName}" }}")
         scope.launch {
-            // MediaStore version short-circuit (moved from LibraryScanViewModel):
-            // if the audio collection version is unchanged since the last
-            // successful scan and we already have cached data, the mtime diff
-            // inside the incremental scan would be a no-op anyway. Skip the
-            // whole refresh request. Skipped on force-refresh (full rescan)
-            // AND on user-initiated refreshes (bypassVersionCache=true) so the
-            // spinner always corresponds to a real scan attempt.
-            if (!forceRefresh && !bypassVersionCache && audioFileScanner.hasCachedData()) {
-                val currentVersion = mediaStoreVersionCache.current()
-                val lastVersion = settingsDataStore.lastKnownMediaStoreVersion.first()
-                if (lastVersion.isNotEmpty() && currentVersion == lastVersion) {
-                    Timber.d(TAG, "MediaStore version unchanged ($currentVersion), skipping refresh")
-                    return@launch
-                }
+            // LAZY: skip the scan entirely when cached data exists. This covers
+            // cold start (no recorded MediaStore version yet → version compare
+            // can't short-circuit) and resume when nothing changed. The cache is
+            // already rendered by the aggregator's direct cache read; external
+            // changes are caught by the MediaStore observer / SAF watcher, which
+            // request INCREMENTAL.
+            if (strategy == RefreshStrategy.LAZY && audioFileScanner.hasCachedData()) {
+                Timber.d(TAG, "LAZY refresh with cached data, skipping scan")
+                return@launch
             }
-            libraryDataHolder.requestGlobalRefresh(
-                forceRefresh = forceRefresh,
-                bypassVersionCache = bypassVersionCache
-            )
+            libraryDataHolder.requestGlobalRefresh(strategy)
         }
     }
 
@@ -155,14 +140,13 @@ class LibraryRepositoryImpl @Inject constructor(
         }
         isWatchingSettings = true
 
+        // Use the raw DataStore flows (first emission IS the stored value, no
+        // stateIn `false` sentinel). Baseline = first combined emission; only
+        // changes after that baseline trigger a FORCE refresh.
         val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled
-            .stateIn(scope, SharingStarted.WhileSubscribed(30000), false)
         val whitelistEnabled = settingsDataStore.whitelistEnabled
-            .stateIn(scope, SharingStarted.WhileSubscribed(30000), false)
         val blacklistEnabled = settingsDataStore.blacklistEnabled
-            .stateIn(scope, SharingStarted.WhileSubscribed(30000), false)
 
-        var isFirstEmission = true
         scope.launch {
             combine(
                 minDurationFilterEnabled,
@@ -171,12 +155,11 @@ class LibraryRepositoryImpl @Inject constructor(
             ) { minDuration, whitelist, blacklist ->
                 Triple(minDuration, whitelist, blacklist)
             }.collect { (minDuration, whitelist, blacklist) ->
-                if (isFirstEmission) {
-                    isFirstEmission = false
+                if (lastWhitelistEnabled == null) {
+                    // First combined emission = baseline.
                     lastMinDurationFilterEnabled = minDuration
                     lastWhitelistEnabled = whitelist
                     lastBlacklistEnabled = blacklist
-                    Timber.d(TAG, "Settings initial values received, skipping initial scan")
                     return@collect
                 }
                 // Check and trigger refresh for each setting that changed.
@@ -186,17 +169,17 @@ class LibraryRepositoryImpl @Inject constructor(
                 if (lastMinDurationFilterEnabled != minDuration) {
                     lastMinDurationFilterEnabled = minDuration
                     Timber.d(TAG, "Min duration filter changed, triggering refresh")
-                    refresh(forceRefresh = true, bypassVersionCache = true)
+                    refresh(RefreshStrategy.FORCE)
                 }
                 if (lastWhitelistEnabled != whitelist) {
                     lastWhitelistEnabled = whitelist
                     Timber.d(TAG, "Whitelist enabled changed, triggering refresh")
-                    refresh(forceRefresh = true, bypassVersionCache = true)
+                    refresh(RefreshStrategy.FORCE)
                 }
                 if (lastBlacklistEnabled != blacklist) {
                     lastBlacklistEnabled = blacklist
                     Timber.d(TAG, "Blacklist enabled changed, triggering refresh")
-                    refresh(forceRefresh = true, bypassVersionCache = true)
+                    refresh(RefreshStrategy.FORCE)
                 }
             }
         }

@@ -131,7 +131,9 @@ class EnrichmentWorker @AssistedInject constructor(
                         albumArtist = cachedFile.metadata.albumArtist ?: lightweightResult.metadata.albumArtist,
                         year = cachedFile.metadata.year ?: lightweightResult.metadata.year,
                         genre = cachedFile.metadata.genre ?: lightweightResult.metadata.genre,
-                        composer = cachedFile.metadata.composer ?: lightweightResult.metadata.composer
+                        composer = cachedFile.metadata.composer ?: lightweightResult.metadata.composer,
+                        lyrics = cachedFile.metadata.lyrics ?: lightweightResult.metadata.lyrics,
+                        comment = cachedFile.metadata.comment ?: lightweightResult.metadata.comment
                     )
                 )
             } else {

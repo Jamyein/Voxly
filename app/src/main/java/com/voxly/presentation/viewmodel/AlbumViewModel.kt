@@ -4,16 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.repository.LibraryRepository
-import com.voxly.data.local.AlbumSortOption
+import com.voxly.domain.repository.RefreshStrategy
 import com.voxly.data.local.UiStateDataStore
 import com.voxly.domain.model.AlbumGroup
-import com.voxly.domain.model.IncrementalList
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.LinkedHashMap
@@ -24,8 +20,9 @@ import javax.inject.Inject
  * Uses AudioFileScanner directly for data (same singleton instance as LibraryViewModel).
  * The repeatOnLifecycle bug was fixed by removing it - screens passively collect data.
  *
- * Sorting: Albums are pre-sorted by AlbumArtistAggregator and cached in Room.
- * AlbumViewModel selects the correct pre-sorted list based on current sort option.
+ * Sorting: Albums are pre-sorted by AlbumArtistAggregator; the scanner's
+ * app-scope [AudioFileScanner.sortedAlbums] projection selects the list for
+ * the persisted sort option (hot before navigation — no empty first frame).
  *
  * Refresh coordination: pull-to-refresh and initial-load refreshes go through
  * [LibraryRepository.refresh], the single fan-in point for all
@@ -39,8 +36,14 @@ class AlbumViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
-    // Albums sorted by different options - pre-computed by aggregator
-    private val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = audioFileScanner.albumsBySort
+    // Display data comes from the scanner's app-scope Eagerly projection
+    // (sortedAlbums = combine(canonical NAME_ASC list, persisted sortOption),
+    // hot before navigation). The old per-VM stateIn(WhileSubscribed, emptyList)
+    // re-wrap caused an empty-first-frame flash on first tab entry; expose directly.
+    val sortedAlbums: StateFlow<List<AlbumGroup>> = audioFileScanner.sortedAlbums
+
+    /** Persisted sort option; the screen writes it via [setSortOption]. */
+    val sortOption = uiStateDataStore.albumSortOption
 
     /**
      * Mirrors the global scan activity maintained by [LibraryRepository].
@@ -53,29 +56,6 @@ class AlbumViewModel @Inject constructor(
 
     /** Scan error events propagated through [LibraryRepository]. */
     val scanError: SharedFlow<String> = libraryRepository.scanError
-
-    /** Diff-based album list updates from AlbumArtistAggregator. */
-    val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = audioFileScanner.albumDiff
-
-    val sortOption = uiStateDataStore.albumSortOption
-
-    // Pre-sorted albums based on current sort option
-    val sortedAlbums: StateFlow<List<AlbumGroup>> = combine(
-        albumsBySort,
-        sortOption
-    ) { sortMap, currentOption ->
-        try {
-            val option = AlbumSortOption.valueOf(currentOption)
-            sortMap[option] ?: sortMap[AlbumSortOption.NAME_ASC] ?: emptyList()
-        } catch (e: IllegalArgumentException) {
-            sortMap[AlbumSortOption.NAME_ASC] ?: emptyList()
-        }
-    }.distinctUntilChanged()
-        .stateIn(
-        scope = viewModelScope,
-        started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(),
-        initialValue = emptyList()
-    )
 
     // Scroll positions storage with LRU eviction
     private val scrollPositions = LinkedHashMap<String, ScrollPosition>(MAX_SCROLL_POSITIONS, 0.75f, true)
@@ -114,8 +94,7 @@ class AlbumViewModel @Inject constructor(
     fun refresh(forceRefresh: Boolean = false) {
         Timber.tag("Voxly").i("AlbumViewModel refresh -> LibraryRepository")
         libraryRepository.refresh(
-            forceRefresh = forceRefresh,
-            bypassVersionCache = true
+            if (forceRefresh) RefreshStrategy.FORCE else RefreshStrategy.INCREMENTAL
         )
     }
 
@@ -127,4 +106,7 @@ class AlbumViewModel @Inject constructor(
             uiStateDataStore.setAlbumSortOption(option)
         }
     }
+
+    /** True when a previous scan has persisted library data (so empty-screen auto-refresh can be skipped). */
+    suspend fun hasCachedData(): Boolean = audioFileScanner.hasCachedData()
 }

@@ -3,9 +3,28 @@ package com.voxly.domain.repository
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
-import com.voxly.domain.model.IncrementalList
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * Controls how aggressively a library refresh request is honoured.
+ *
+ * [LAZY] — skip the scan entirely if the MediaStore version hasn't changed
+ *   since the last successful scan. For resume callbacks and periodic workers
+ *   where a no-op is the common case.
+ *
+ * [INCREMENTAL] — always run the incremental scan (mtime-based diff), even
+ *   when the version hasn't changed. For MediaStore observer fires where real
+ *   filesystem changes are suspected.
+ *
+ * [FORCE] — full rescan, bypassing every cache/short-circuit. For user-initiated
+ *   pull-to-refresh.
+ */
+enum class RefreshStrategy {
+    LAZY,
+    INCREMENTAL,
+    FORCE
+}
 
 /**
  * Centralized library repository — the single entry point for all
@@ -24,8 +43,6 @@ interface LibraryRepository {
     val allAudios: StateFlow<List<AudioFile>>
     val albums: StateFlow<List<AlbumGroup>>
     val artists: StateFlow<List<ArtistGroup>>
-    val albumDiff: SharedFlow<IncrementalList<AlbumGroup>>
-    val artistDiff: SharedFlow<IncrementalList<ArtistGroup>>
 
     // ─── Reactive scan state ───────────────────────────────
 
@@ -40,18 +57,8 @@ interface LibraryRepository {
     /**
      * Request a library refresh. Deduplicated via conflated SharedFlow
      * + collectLatest so concurrent requests collapse into one scan.
-     *
-     * @param forceRefresh Full rescan, ignores cache.
-     * @param bypassVersionCache Skip the MediaStore version short-circuit.
-     *   Pass `true` from user-initiated pull-to-refresh so the spinner
-     *   always corresponds to a real scan attempt. System-driven refreshes
-     *   (MediaStore observer, periodic worker, SAF walker) keep the default
-     *   `false` to stay cheap when MediaStore has not changed.
      */
-    fun refresh(
-        forceRefresh: Boolean = false,
-        bypassVersionCache: Boolean = false,
-    )
+    fun refresh(strategy: RefreshStrategy = RefreshStrategy.LAZY)
 
     // ─── Single-file sync (metadata edit) ──────────────────
 

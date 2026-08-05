@@ -26,6 +26,7 @@ import javax.inject.Singleton
         EnrichmentJobEntity::class,
         DirectorySnapshotEntity::class,
         AlbumSortOrderEntity::class,
+        AggregateSnapshotEntity::class,
     ],
     // v15: replaced the polymorphic `id` String primary key (MediaStore _ID at
     // scan time, `path.hashCode()` after the first save) with `path` itself on
@@ -35,7 +36,9 @@ import javax.inject.Singleton
     // the old `id` (32-bit hash) is meaningless under the new schema anyway.
     // v16: added pre-computed sortTitle/sortAlbum columns to eliminate
     // COALESCE in ORDER BY clauses so SQLite can use B-tree indices.
-    version = 16,
+    // v17: added aggregate_snapshot — persisted album/artist structures so
+    // cold start renders without re-running the pinyin-sort rebuild.
+    version = 17,
     exportSchema = false
 )
 /**
@@ -54,6 +57,7 @@ abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun recentEditDao(): RecentEditDao
     abstract fun enrichmentJobDao(): EnrichmentJobDao
     abstract fun directorySnapshotDao(): DirectorySnapshotDao
+    abstract fun aggregateSnapshotDao(): AggregateSnapshotDao
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"
@@ -107,15 +111,9 @@ class MusicCacheDatabaseProvider @Inject constructor(
     }
 
     fun getDatabase(): MusicCacheDatabase {
-        return instance ?: synchronized(this) {
-            val storedDataFormatVersion = prefs.getInt(KEY_DATA_FORMAT_VERSION, 1)
-            if (storedDataFormatVersion < CURRENT_DATA_FORMAT_VERSION) {
-                instance?.close()
-                instance = null
-                context.deleteDatabase(MusicCacheDatabase.DATABASE_NAME)
-                prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
-            }
-
+        if (instance != null) return instance!!
+        return synchronized(this) {
+            if (instance != null) return instance!!
             val builder = Room.databaseBuilder(
                 context.applicationContext,
                 MusicCacheDatabase::class.java,
@@ -274,6 +272,21 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_artist_sort` ON `cached_audio_files` (`artist`, `sortAlbum`, `trackNumber`, `sortTitle`)")
                     }
                 })
+                // Migration from version 16 to 17: adds aggregate_snapshot table
+                // (persisted album/artist structures for instant cold start).
+                .addMigrations(object : Migration(16, 17) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `aggregate_snapshot` (
+                                `id` INTEGER PRIMARY KEY NOT NULL,
+                                `fingerprint` TEXT NOT NULL,
+                                `albumsJson` TEXT NOT NULL,
+                                `artistsJson` TEXT NOT NULL,
+                                `savedAt` INTEGER NOT NULL
+                            )
+                        """)
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -300,6 +313,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
         // MUST match the Room @Database(version = ...) annotation above.
         // Bump this whenever you add a new migration or change the version.
-        private const val CURRENT_DATA_FORMAT_VERSION = 16
+        private const val CURRENT_DATA_FORMAT_VERSION = 17
     }
 }

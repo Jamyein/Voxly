@@ -143,7 +143,8 @@ class AlbumGroupingProviderTest {
                 mockk<AudioFile> {
                     every { path } returns "/music/b/2.mp3"
                 }
-            )
+            ),
+            sortKey = "album b"
         )
         every { aggregator.albums } returns MutableStateFlow(listOf(aggregatorGroup))
 

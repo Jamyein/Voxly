@@ -91,11 +91,20 @@ class AudioRepositoryImpl @Inject constructor(
                     cachedEntity.fileLastModifiedAt == fileLastModified
 
                 if (cachedFile != null && isFileUnchanged) {
-                    // Read the file even on a cache hit so detailed fields (lyrics,
-                    // comment, lyricist, ...) that the scan pipeline never persists
-                    // still reach the editor. includeAlbumArt=false keeps this cheap
-                    // (no picture read). HI-8 made this conditional on includeAlbumArt,
-                    // which regressed the metadata editor to empty lyrics.
+                    // The scan/enrichment pipeline now persists detailed fields
+                    // (lyrics, comment, lyricist, ...) into the entity, so a cache
+                    // hit is normally complete. Only fall back to a full file parse
+                    // for legacy rows that predate that persistence (e.g. cached
+                    // before this version's enrichment ran).
+                    val needsDetailRead = includeAlbumArt ||
+                        (cachedFile.metadata.lyrics == null &&
+                            cachedFile.metadata.comment == null &&
+                            cachedFile.metadata.lyricist == null &&
+                            cachedFile.metadata.conductor == null &&
+                            cachedFile.metadata.originalArtist == null)
+                    if (!needsDetailRead) {
+                        return@withContext Result.success(cachedFile)
+                    }
                     val complete = metadataProcessor.readAllMetadata(
                         normalizedPath, includeAlbumArt = includeAlbumArt, bypassCache = true
                     )
@@ -334,7 +343,16 @@ class AudioRepositoryImpl @Inject constructor(
                         // After metadata update, re-query MediaStore to get the CORRECT album ID
                         // because album/artist changes can result in a different MediaStore album ID
                         val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(normalizedFilePath)
-                        val updatedFile = getAudioFile(normalizedFilePath, includeAlbumArt = true).getOrNull()
+
+                        // Build the cache entry from the old entity (which holds the
+                        // disk-independent fields: duration/bitrate/sampleRate/format/size)
+                        // plus the metadata we just wrote — no post-write re-read of the
+                        // file, no embedded-cover decode. Falls back to the legacy full
+                        // re-read when the file isn't cached yet (e.g. right after a scan).
+                        val updatedFile = oldFile?.copy(
+                            metadata = metadata,
+                            mediaStoreAlbumId = correctAlbumId ?: oldFile.mediaStoreAlbumId
+                        ) ?: getAudioFile(normalizedFilePath, includeAlbumArt = false).getOrNull()
 
                         // If album/artist changed, invalidate old cover disk cache
                         val newAlbumArtist = metadata.albumArtist ?: metadata.artist
@@ -402,11 +420,13 @@ class AudioRepositoryImpl @Inject constructor(
                     val updatedMetadata = currentMetadata.copy(albumArt = albumArtBytes)
                     metadataProcessor.updateMetadata(filePath, updatedMetadata).fold(
                         onSuccess = {
-                            // Re-read the updated file and sync to cache
-                            val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
-                            if (updatedFile != null) {
-                                libraryCache.syncFileToCache(updatedFile)
+                            // Album art is not persisted in Room; sync the cache entry
+                            // with the metadata we already hold — no post-write re-read.
+                            libraryCache.getCachedFileEntity(filePath)?.let { existing ->
+                                val cached = existing.toAudioFile()
+                                libraryCache.syncFileToCache(cached.copy(metadata = updatedMetadata))
                             }
+                            CoverUriProvider.invalidateFilePath(filePath)
                             Result.success(Unit)
                         },
                         onFailure = { cause ->
@@ -431,11 +451,13 @@ class AudioRepositoryImpl @Inject constructor(
                     val updatedMetadata = currentMetadata.copy(albumArt = null)
                     metadataProcessor.updateMetadata(filePath, updatedMetadata).fold(
                         onSuccess = {
-                            // Re-read the updated file and sync to cache
-                            val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
-                            if (updatedFile != null) {
-                                libraryCache.syncFileToCache(updatedFile)
+                            // Album art is not persisted in Room; sync the cache entry
+                            // with the metadata we already hold — no post-write re-read.
+                            libraryCache.getCachedFileEntity(filePath)?.let { existing ->
+                                val cached = existing.toAudioFile()
+                                libraryCache.syncFileToCache(cached.copy(metadata = updatedMetadata))
                             }
+                            CoverUriProvider.invalidateFilePath(filePath)
                             Result.success(Unit)
                         },
                         onFailure = { cause ->

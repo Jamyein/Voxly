@@ -1,23 +1,14 @@
 package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.voxly.core.util.SortUtil
 import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.RefreshStrategy
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
-import com.voxly.domain.model.IncrementalList
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -35,42 +26,12 @@ class ArtistViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
+    // Display data comes from the scanner's app-scope Eagerly projections
+    // (hot before navigation — no empty-first-frame flash). The old per-VM
+    // stateIn(WhileSubscribed, emptyList) re-wraps re-ran the artist mapping
+    // on every tab re-entry; expose directly instead.
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(),
-            initialValue = emptyList()
-        )
-
-    val artistListItems: StateFlow<List<ArtistListItemState>> = artists
-        .map { artistGroups ->
-            artistGroups
-                .groupBy { it.name }
-                .map { (name, groups) ->
-                    val first = groups.first()
-                    val albumNames = groups.flatMap { it.files }
-                        .mapNotNull { it.metadata.album }
-                        .filter { it.isNotBlank() }
-                        .toSet()
-                    val coverFile = groups.flatMap { it.files }
-                        .firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    ArtistListItemState(
-                        name = name,
-                        coverPath = first.coverPath,
-                        coverAlbumId = coverFile?.mediaStoreAlbumId,
-                        albumCount = albumNames.size,
-                        trackCount = groups.sumOf { it.files.size }
-                    )
-                }
-                .sortedBy { SortUtil.toSortablePinyin(it.name) }
-        }
-        .flowOn(Dispatchers.Default)
-        .distinctUntilChanged()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(),
-            initialValue = emptyList()
-        )
+    val artistListItems: StateFlow<List<ArtistListItemState>> = audioFileScanner.artistListItems
 
     /**
      * Mirrors the global scan activity maintained by [LibraryRepository].
@@ -81,9 +42,6 @@ class ArtistViewModel @Inject constructor(
 
     /** Scan error events propagated through [LibraryRepository]. */
     val scanError: SharedFlow<String> = libraryRepository.scanError
-
-    /** Diff-based artist list updates from AlbumArtistAggregator. */
-    val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = audioFileScanner.artistDiff
 
     /**
      * Request a library refresh via [LibraryRepository]. Bursts are
@@ -97,10 +55,11 @@ class ArtistViewModel @Inject constructor(
     fun refresh(forceRefresh: Boolean = false) {
         Timber.tag("Voxly").i("ArtistViewModel refresh -> LibraryRepository")
         libraryRepository.refresh(
-            forceRefresh = forceRefresh,
-            bypassVersionCache = true
+            if (forceRefresh) RefreshStrategy.FORCE else RefreshStrategy.INCREMENTAL
         )
     }
 
+    /** True when a previous scan has persisted library data (so empty-screen auto-refresh can be skipped). */
+    suspend fun hasCachedData(): Boolean = audioFileScanner.hasCachedData()
 
 }

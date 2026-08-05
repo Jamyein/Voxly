@@ -152,6 +152,15 @@ class SettingsDataStore @Inject constructor(
              */
             val LAST_KNOWN_MEDIASTORE_VERSION = stringPreferencesKey("last_known_mediastore_version")
             val FILE_COUNT = intPreferencesKey("last_known_file_count")
+
+            /**
+             * Wall-clock time (epoch millis) of the last COMPLETED global
+             * incremental scan. The incremental strategy compares MediaStore
+             * `DATE_MODIFIED` against this (NOT against the per-row
+             * `lastScannedAt` cache-write timestamp, which single-file edits
+             * can push forward and hide real external changes).
+             */
+            val LAST_SCAN_COMPLETED_AT = longPreferencesKey("last_scan_completed_at")
         }
     }
 
@@ -1255,6 +1264,22 @@ class SettingsDataStore @Inject constructor(
     suspend fun setLastKnownMediaStoreVersion(version: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[Library.LAST_KNOWN_MEDIASTORE_VERSION] = version
+        }
+    }
+
+    /**
+     * Epoch millis of the last completed global incremental scan.
+     * 0 = never recorded (first run / legacy).
+     */
+    val lastScanCompletedAt: Flow<Long> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[Library.LAST_SCAN_COMPLETED_AT] ?: 0L
+        }
+        .distinctUntilChanged()
+
+    suspend fun setLastScanCompletedAt(timestamp: Long) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[Library.LAST_SCAN_COMPLETED_AT] = timestamp
         }
     }
 
