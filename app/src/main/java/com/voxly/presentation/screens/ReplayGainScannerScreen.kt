@@ -18,6 +18,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.repository.ScanQuality
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import kotlinx.coroutines.delay
@@ -44,31 +47,26 @@ fun ReplayGainScannerScreen(
     var scanQuality by remember { mutableStateOf(ScanQuality.NORMAL) }
     val scope = rememberCoroutineScope()
 
-    Scaffold(
+    VoxlyScaffold(
         topBar = {
-            TopAppBar(
+            VoxlyTopAppBar(
+                theme = TopBarTheme.Library,
                 title = { Text(stringResource(R.string.replay_gain_scanner_title)) },
-                navigationIcon = {
-                    FilledTonalIconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    }
-                },
+                onBack = onNavigateBack,
                 actions = {
                     if (!isScanning) {
                         IconButton(onClick = { showSettingsSheet = true }) {
                             Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.nav_settings))
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(),
-                windowInsets = WindowInsets(0.dp)
+                }
             )
         }
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(top = paddingValues.calculateTopPadding())
         ) {
             if (isScanning) {
                 // Scanning UI
@@ -221,6 +219,7 @@ private fun ConfigurationContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp)
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
     ) {
         // Header

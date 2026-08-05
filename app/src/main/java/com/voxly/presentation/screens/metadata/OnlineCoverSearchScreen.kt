@@ -22,10 +22,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Refresh
 import com.voxly.presentation.components.SourceTag
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
+import com.voxly.presentation.components.navBarsBottomInset
 import com.voxly.presentation.theme.MaterialShapes
 import com.voxly.presentation.theme.emphasizedTitleMedium
 import androidx.compose.material3.toShape
@@ -38,11 +41,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 
@@ -98,10 +98,11 @@ fun OnlineCoverSearchScreen(
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
-    Scaffold(
+    VoxlyScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            VoxlyTopAppBar(
+                theme = TopBarTheme.Library,
                 title = {
                     Column {
                         Text(
@@ -122,19 +123,7 @@ fun OnlineCoverSearchScreen(
                     }
                 },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                navigationIcon = {
-                    FilledTonalIconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
+                onBack = onNavigateBack,
                 actions = {
                     IconButton(
                         onClick = { viewModel.search(filePath) },
@@ -185,7 +174,9 @@ fun OnlineCoverSearchScreen(
                  ) {
              LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 16.dp)
+                    contentPadding = PaddingValues(
+                        bottom = 16.dp + navBarsBottomInset()
+                    )
                 ) {
                     items(
                         items = coverResults,

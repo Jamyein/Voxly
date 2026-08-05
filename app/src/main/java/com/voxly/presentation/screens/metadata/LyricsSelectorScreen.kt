@@ -8,16 +8,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -25,14 +27,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +49,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.Lyrics.Companion.parseToLines
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.viewmodel.LyricsSelectorViewModel
 
 /**
@@ -85,29 +87,19 @@ fun LyricsSelectorScreen(
     // Selected lines state - Map of index to lyrics text
     var selectedLines by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
 
-    Scaffold(
+    VoxlyScaffold(
         topBar = {
-            TopAppBar(
+            VoxlyTopAppBar(
+                theme = TopBarTheme.Library,
                 title = { Text(stringResource(R.string.select_lyrics_for_poster)) },
-                navigationIcon = {
-                    FilledTonalIconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                onBack = onNavigateBack
             )
         }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(horizontal = 16.dp)
         ) {
             // Selection info
@@ -234,6 +226,9 @@ fun LyricsSelectorScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Trailing nav-bar inset so the action row clears the gesture / 3-button area.
+            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 

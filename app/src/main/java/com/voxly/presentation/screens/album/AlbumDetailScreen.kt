@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -34,11 +33,9 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,10 +61,14 @@ import timber.log.Timber
 import com.voxly.R
 import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createAlbumTitleSharedElementKey
 import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.components.navBarsBottomInset
 import com.voxly.presentation.components.openMetadataFor
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.theme.rememberSharedElementBoundsTransform
@@ -94,14 +95,16 @@ fun AlbumDetailScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val albumNameState by viewModel.albumName.collectAsStateWithLifecycle()
-    val albumArtistState by viewModel.albumArtist.collectAsStateWithLifecycle()
-    val albumYear by viewModel.albumYear.collectAsStateWithLifecycle()
-    val albumBitrate by viewModel.albumBitrate.collectAsStateWithLifecycle()
-    val albumSampleRate by viewModel.albumSampleRate.collectAsStateWithLifecycle()
-    val files by viewModel.files.collectAsStateWithLifecycle()
-    val coverPath by viewModel.coverPath.collectAsStateWithLifecycle()
-    val coverUri by viewModel.coverUri.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val dominantColor by viewModel.dominantColor.collectAsStateWithLifecycle()
+    val albumNameState = state.albumName
+    val albumArtistState = state.albumArtist
+    val albumYear = state.albumYear
+    val albumBitrate = state.albumBitrate
+    val albumSampleRate = state.albumSampleRate
+    val files = state.files
+    val coverPath = state.coverPath
+    val coverUri = state.coverUri
     // Calculate total duration
     val totalDuration = remember(files) {
         files.sumOf { it.duration }
@@ -124,35 +127,25 @@ fun AlbumDetailScreen(
         )
     }
 
-    val dominantColor by viewModel.dominantColor.collectAsStateWithLifecycle()
+    // Group by disc in composition scope (LazyColumn content can't remember)
+    val (sortedDiscNumbers, groupedFiles) = remember(sortedFiles) {
+        val g = sortedFiles.groupBy { it.metadata.discNumber ?: 1 }
+        g.keys.sorted() to g
+    }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    Scaffold(
+    VoxlyScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(
+            VoxlyTopAppBar(
+                theme = TopBarTheme.Immersive,
                 title = { },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                navigationIcon = {
-                    androidx.compose.material3.FilledTonalIconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.padding(start = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back)
-                        )
-                    }
-                }
+                onBack = onNavigateBack
             )
         }
     ) { innerPadding ->
@@ -174,7 +167,7 @@ fun AlbumDetailScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     top = 0.dp,
-                    bottom = 12.dp + innerPadding.calculateBottomPadding(),
+                    bottom = 12.dp + navBarsBottomInset(),
                     start = 12.dp,
                     end = 12.dp
                 ),
@@ -270,10 +263,12 @@ fun AlbumDetailScreen(
                             textAlign = TextAlign.Center,
                             modifier = if (canUseSharedTransition) {
                                 with(sharedTransitionScope) {
-                                    Modifier.sharedElement(
+                                    Modifier.sharedBounds(
                                         rememberSharedContentState(key = albumTitleKey),
                                         animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = rememberSharedElementTitleBoundsTransform()
+                                        boundsTransform = rememberSharedElementTitleBoundsTransform(),
+                                        // Text: scale instead of re-measure so multi-line titles don't reflow mid-morph.
+                                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
                                     )
                                 }
                             } else Modifier
@@ -291,10 +286,11 @@ fun AlbumDetailScreen(
                             textAlign = TextAlign.Center,
                             modifier = if (canUseSharedTransition && albumArtistKey != null) {
                                 with(sharedTransitionScope) {
-                                    Modifier.sharedElement(
+                                    Modifier.sharedBounds(
                                         rememberSharedContentState(key = albumArtistKey),
                                         animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = rememberSharedElementTextBoundsTransform()
+                                        boundsTransform = rememberSharedElementTextBoundsTransform(),
+                                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
                                     )
                                 }
                             } else Modifier
@@ -372,9 +368,6 @@ fun AlbumDetailScreen(
 
                 // Song list grouped by disc — each song is a lazy item for
                 // efficient scrolling on multi-disc albums.
-                val groupedFiles = sortedFiles.groupBy { it.metadata.discNumber ?: 1 }
-                val sortedDiscNumbers = groupedFiles.keys.sorted()
-
                 sortedDiscNumbers.forEach { discNumber ->
                     val discFiles = groupedFiles[discNumber] ?: return@forEach
 
@@ -390,7 +383,8 @@ fun AlbumDetailScreen(
                     // Songs as individual lazy items with stable keys
                     itemsIndexed(
                         items = discFiles,
-                        key = { _, audioFile -> "song_${audioFile.path}" }
+                        key = { _, audioFile -> "song_${audioFile.path}" },
+                        contentType = { _, _ -> "song" }
                     ) { index, audioFile ->
                         // 首尾卡片加大圆角：顶端卡上角 / 末端卡下角 28dp，中间卡小圆角相连
                         val segmentShape = when {

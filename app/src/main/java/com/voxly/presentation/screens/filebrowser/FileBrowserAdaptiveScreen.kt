@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
@@ -26,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetState
@@ -40,6 +40,7 @@ import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.window.core.layout.WindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -64,6 +65,8 @@ import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.RootTab
 import com.voxly.presentation.components.LocalBottomBarVisibilityController
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.components.chainNestedScrollConnections
 import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
@@ -152,7 +155,8 @@ fun FileBrowserAdaptiveScreen(
     val isRefreshing = scanUiState.isRefreshing
     val isInitialLoad = scanUiState.isInitialLoad
     val hasWhitelistDirectories = scanUiState.hasWhitelistDirectories
-    val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val selectedFilesState = viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val selectedFiles = selectedFilesState.value
     val rootTabString by settingsViewModel.fileBrowserRootTab.collectAsStateWithLifecycle(initialValue = RootTab.DIRECTORIES.name)
     val currentSortOption by scanViewModel.currentFileSortOption.collectAsStateWithLifecycle()
     val effectiveRootTab = if (hasWhitelistDirectories) {
@@ -248,7 +252,7 @@ fun FileBrowserAdaptiveScreen(
             onNavigateToSettings = onNavigateToSettings,
             isSinglePane = isSinglePane || isExpandedWidth,
             isSelectionMode = isSelectionMode,
-            selectedFiles = selectedFiles,
+            selectedFilesState = selectedFilesState,
             onFileClick = remember(viewModel, isSelectionMode, isSinglePane, isExpandedWidth, coroutineScope, navigator, onNavigateToMetadata) {
                 { audioFile ->
                     if (isSelectionMode) {
@@ -359,7 +363,7 @@ private fun FileBrowserListPane(
     onNavigateToSettings: () -> Unit,
     isSinglePane: Boolean,
     isSelectionMode: Boolean,
-    selectedFiles: Set<String>,
+    selectedFilesState: State<Set<String>>,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
     listState: LazyGridState,
@@ -376,7 +380,9 @@ private fun FileBrowserListPane(
     val coroutineScope = rememberCoroutineScope()
 
     Column(modifier = modifier) {
-        MediumTopAppBar(
+        VoxlyTopAppBar(
+            large = true,
+            theme = TopBarTheme.Library,
             title = {
                 Text(
                     text = stringResource(R.string.nav_file_browser),
@@ -385,11 +391,6 @@ private fun FileBrowserListPane(
                 )
             },
             scrollBehavior = scrollBehavior,
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                titleContentColor = MaterialTheme.colorScheme.onSurface
-            ),
             actions = {
                 IconButton(onClick = onShowSearchSheet) {
                     Icon(
@@ -458,7 +459,7 @@ private fun FileBrowserListPane(
                 } else {
                     AllAudiosTabContent(
                         audios = displayedFiles,
-                        selectedFiles = selectedFiles,
+                        selectedFilesState = selectedFilesState,
                         onFileClick = onFileClick,
                         onFileLongClick = onFileLongClick,
                         isRefreshing = isRefreshing,
@@ -499,6 +500,7 @@ private fun FileBrowserListPane(
                         shape = MaterialTheme.shapes.extraLarge,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
                             .padding(16.dp)
                     ) {
                         Icon(

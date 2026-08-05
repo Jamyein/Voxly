@@ -20,7 +20,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,12 +27,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -56,6 +52,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.presentation.components.SourceTag
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
+import com.voxly.presentation.components.navBarsBottomInset
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.emphasizedTitleMedium
 import com.voxly.presentation.viewmodel.OnlineLyricsSearchViewModel
@@ -88,10 +88,11 @@ fun OnlineLyricsSearchScreen(
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
-    Scaffold(
+    VoxlyScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            VoxlyTopAppBar(
+                theme = TopBarTheme.Library,
                 title = {
                     Column {
                         Text(
@@ -116,19 +117,7 @@ fun OnlineLyricsSearchScreen(
                     }
                 },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                navigationIcon = {
-                    FilledTonalIconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
+                onBack = onNavigateBack,
                 actions = {
                     IconButton(
                         onClick = { viewModel.search(filePath) },
@@ -140,14 +129,14 @@ fun OnlineLyricsSearchScreen(
             )
         }
     ) { innerPadding ->
-        // Content with innerPadding from Scaffold
+        // Edge-to-edge convention: top from the Scaffold, bottom = explicit nav-bar inset.
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(
                 top = innerPadding.calculateTopPadding(),
-                bottom = innerPadding.calculateBottomPadding(),
+                bottom = navBarsBottomInset(),
                 start = 0.dp,
                 end = 0.dp
             ),
@@ -157,7 +146,7 @@ fun OnlineLyricsSearchScreen(
              if (searchState.isSearching || isLoading) {
                  item {
                      AnimatedVisibility(
-                         visible = true,
+                         visible = searchState.isSearching || isLoading,
                          enter = ExpressiveAnimations.fadeEnter(),
                          exit = ExpressiveAnimations.fadeExit()
                      ) {
@@ -202,7 +191,7 @@ fun OnlineLyricsSearchScreen(
              if (lyricsResults.isEmpty() && !isLoading && errorMessage == null) {
                  item {
                       AnimatedVisibility(
-                          visible = true,
+                          visible = lyricsResults.isEmpty() && !isLoading && errorMessage == null,
                           enter = ExpressiveAnimations.listItemEnter(),
                           exit = ExpressiveAnimations.fadeExit()
                       ) {
@@ -224,28 +213,23 @@ fun OnlineLyricsSearchScreen(
 
              if (lyricsResults.isNotEmpty()) {
                  items(lyricsResults, key = { it.id }) { item ->
-                     AnimatedVisibility(
-                         visible = true,
-                         enter = ExpressiveAnimations.listItemEnter(),
-                         exit = ExpressiveAnimations.fadeExit()
-                     ) {
-                        LyricsResultItem(
-                            item = item,
-                            isLoading = isFetchingLyrics && fetchingItemId == item.id,
-                            onClick = {
-                                isFetchingLyrics = true
-                                fetchingItemId = item.id
-                                coroutineScope.launch {
-                                    val lyricsText = viewModel.getLyricsContent(item)
-                                    isFetchingLyrics = false
-                                    fetchingItemId = null
-                                    if (lyricsText != null) {
-                                        onLyricsSelected(lyricsText)
-                                    }
+                     // 行入场交给 pane 过渡；不逐行动画，避免滚动回显时重播。
+                     LyricsResultItem(
+                        item = item,
+                        isLoading = isFetchingLyrics && fetchingItemId == item.id,
+                        onClick = {
+                            isFetchingLyrics = true
+                            fetchingItemId = item.id
+                            coroutineScope.launch {
+                                val lyricsText = viewModel.getLyricsContent(item)
+                                isFetchingLyrics = false
+                                fetchingItemId = null
+                                if (lyricsText != null) {
+                                    onLyricsSelected(lyricsText)
                                 }
                             }
-                        )
-                    }
+                        }
+                    )
                 }
             }
         }

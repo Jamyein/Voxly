@@ -1,6 +1,5 @@
 package com.voxly.presentation.screens.album
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,13 +24,11 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -57,16 +53,20 @@ import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.LibraryRefreshBox
+import com.voxly.presentation.components.LazyGridCoverPreloader
 import com.voxly.presentation.components.LocalBottomBarVisibilityController
 import com.voxly.presentation.components.SortMenuButton
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.components.chainNestedScrollConnections
+import com.voxly.presentation.components.libraryContentPadding
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createAlbumTitleSharedElementKey
 import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
-import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.rememberSharedElementBoundsTransform
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
@@ -156,9 +156,17 @@ internal fun AlbumScreenContent(
     val sortOption by viewModel.sortOption.collectAsStateWithLifecycle(initialValue = AlbumSortOption.NAME_ASC.name)
     var scrollToTopTrigger by remember { mutableIntStateOf(0) }
     var isSortExpanded by remember { mutableStateOf(false) }
+    // Incremented on every real sort switch (menu click). A fresh composition (tab re-entry)
+    // resets it to 0, so it distinguishes "user switched sort" (must start at top) from
+    // "screen re-entered" (restore the saved position).
+    var sortChangeCount by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(albums, isRefreshing) {
-        if (albums.isEmpty() && !isRefreshing) {
+        // Only auto-refresh when there's genuinely no data — a fresh install with
+        // an empty cache. When cached data exists the aggregator's direct cache
+        // read fills the list without needing a scan, so this trigger would just
+        // flash the skeleton + pull-to-refresh every cold start.
+        if (albums.isEmpty() && !isRefreshing && !viewModel.hasCachedData()) {
             viewModel.refresh()
         }
     }
@@ -200,11 +208,13 @@ internal fun AlbumScreenContent(
         }
     }
 
-    Scaffold(
+    VoxlyScaffold(
         modifier = Modifier.nestedScroll(chainedNestedScroll),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            MediumTopAppBar(
+            VoxlyTopAppBar(
+                large = true,
+                theme = TopBarTheme.Library,
                 title = {
                     Box(
                         modifier = Modifier
@@ -214,17 +224,11 @@ internal fun AlbumScreenContent(
                             }
                     ) {
                         Text(
-                            text = stringResource(R.string.nav_albums),
-                            style = MaterialTheme.typography.titleLarge
+                            text = stringResource(R.string.nav_albums)
                         )
                     }
                 },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
                 actions = {
                     IconButton(onClick = onShowSearchSheet) {
                         Icon(
@@ -239,7 +243,12 @@ internal fun AlbumScreenContent(
                         options = AlbumSortOption.entries,
                         optionLabelResId = { it.labelResId() },
                         contentDescription = stringResource(R.string.album_sort_label),
-                        onSortOptionChange = { viewModel.setSortOption(it.name) }
+                        onSortOptionChange = { option ->
+                            if (option != currentSortOption) {
+                                sortChangeCount++
+                                viewModel.setSortOption(option.name)
+                            }
+                        }
                     )
                 }
             )
@@ -256,32 +265,33 @@ internal fun AlbumScreenContent(
                 scrollBehavior = scrollBehavior
             ) {
                 if (albums.isEmpty() && !isRefreshing) {
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = ExpressiveAnimations.fadeEnter()
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = stringResource(R.string.no_albums_found),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = stringResource(R.string.no_albums_found),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
-                    AlbumTabContent(
-                        albums = albums,
-                        onAlbumClick = onAlbumClick,
-                        scrollToTopTrigger = scrollToTopTrigger,
-                        sortOption = currentSortOption,
-                        savedScrollPosition = savedScrollPosition,
-                        onSaveScrollPosition = { index, offset ->
-                            val sortKey = previousSortOptionName ?: currentSortOption.name
-                            viewModel.saveScrollPosition("album_list_$sortKey", index, offset)
-                        },
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
+                    // Key on the sort so the grid is recreated exactly when the re-sorted
+                    // list lands: after a real switch (sortChangeCount > 0) it starts at the
+                    // top; on tab re-entry (fresh composition, count == 0) it restores.
+                    key(currentSortOption) {
+                        AlbumTabContent(
+                            albums = albums,
+                            onAlbumClick = onAlbumClick,
+                            scrollToTopTrigger = scrollToTopTrigger,
+                            sortOption = currentSortOption,
+                            startFromTop = sortChangeCount > 0,
+                            savedScrollPosition = savedScrollPosition,
+                            onSaveScrollPosition = { index, offset ->
+                                val sortKey = previousSortOptionName ?: currentSortOption.name
+                                viewModel.saveScrollPosition("album_list_$sortKey", index, offset)
+                            },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
                 }
             }
         }
@@ -295,6 +305,7 @@ internal fun AlbumTabContent(
     onAlbumClick: (AlbumGroup) -> Unit,
     scrollToTopTrigger: Int = 0,
     sortOption: AlbumSortOption? = null,
+    startFromTop: Boolean = false,
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
     onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -302,10 +313,11 @@ internal fun AlbumTabContent(
 ) {
     val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
 
-    // Restore scroll position for grid
+    // Restore the saved scroll position, unless the sort just changed (startFromTop) —
+    // then the grid is (re)created at the top.
     val gridState = rememberLazyGridState(
-        initialFirstVisibleItemIndex = savedScrollPosition?.index ?: 0,
-        initialFirstVisibleItemScrollOffset = savedScrollPosition?.offset ?: 0
+        initialFirstVisibleItemIndex = if (startFromTop) 0 else savedScrollPosition?.index ?: 0,
+        initialFirstVisibleItemScrollOffset = if (startFromTop) 0 else savedScrollPosition?.offset ?: 0
     )
 
     LaunchedEffect(scrollToTopTrigger) {
@@ -323,17 +335,12 @@ internal fun AlbumTabContent(
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         if (albums.isEmpty()) {
-            AnimatedVisibility(
-                visible = true,
-                enter = ExpressiveAnimations.fadeEnter()
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(R.string.no_albums_found),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.no_albums_found),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         } else {
             if (isYearSort) {
@@ -342,6 +349,7 @@ internal fun AlbumTabContent(
                     onAlbumClick = onAlbumClick,
                     isDescending = true,
                     scrollToTopTrigger = scrollToTopTrigger,
+                    startFromTop = startFromTop,
                     savedScrollPosition = savedScrollPosition,
                     onSaveScrollPosition = onSaveScrollPosition,
                     sharedTransitionScope = sharedTransitionScope,
@@ -352,7 +360,7 @@ internal fun AlbumTabContent(
                    state = gridState,
                     columns = GridCells.Adaptive(160.dp),
                    modifier = Modifier.fillMaxSize(),
-                   contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                   contentPadding = libraryContentPadding(),
                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
                ) {
@@ -378,6 +386,16 @@ internal fun AlbumTabContent(
                         }
                     }
                 }
+
+                LazyGridCoverPreloader(
+                    gridState = gridState,
+                    covers = remember(albums) {
+                        albums.map { album ->
+                            val f = album.coverFile()
+                            if (f != null) f.path to f.mediaStoreAlbumId else null to null
+                        }
+                    }
+                )
             }
         }
 
@@ -403,15 +421,17 @@ internal fun AlbumYearGroupedContent(
     onAlbumClick: (AlbumGroup) -> Unit,
     isDescending: Boolean = false,
     scrollToTopTrigger: Int = 0,
+    startFromTop: Boolean = false,
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
     onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    // Restore scroll position
+    // Restore the saved scroll position, unless the sort just changed (startFromTop) —
+    // then the grid is (re)created at the top.
     val gridState = rememberLazyGridState(
-        initialFirstVisibleItemIndex = savedScrollPosition?.index ?: 0,
-        initialFirstVisibleItemScrollOffset = savedScrollPosition?.offset ?: 0
+        initialFirstVisibleItemIndex = if (startFromTop) 0 else savedScrollPosition?.index ?: 0,
+        initialFirstVisibleItemScrollOffset = if (startFromTop) 0 else savedScrollPosition?.offset ?: 0
     )
 
     LaunchedEffect(scrollToTopTrigger) {
@@ -444,7 +464,7 @@ internal fun AlbumYearGroupedContent(
             state = gridState,
             columns = GridCells.Adaptive(160.dp),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            contentPadding = libraryContentPadding(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -484,6 +504,19 @@ internal fun AlbumYearGroupedContent(
                 }
             }
         }
+
+        // covers aligned to grid item order (one null header slot per year group)
+        LazyGridCoverPreloader(
+            gridState = gridState,
+            covers = remember(yearGroups) {
+                yearGroups.flatMap { group ->
+                    listOf<Pair<String?, Long?>>(null to null) + group.albums.map { album ->
+                        val f = album.coverFile()
+                        if (f != null) f.path to f.mediaStoreAlbumId else null to null
+                    }
+                }
+            }
+        )
 
         LazyVerticalGridScrollbar(
             state = gridState,

@@ -32,6 +32,17 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import androidx.compose.ui.graphics.Color
 
+data class AlbumDetailUiState(
+    val albumName: String = "",
+    val albumArtist: String? = null,
+    val albumYear: String? = null,
+    val albumBitrate: Int = 0,
+    val albumSampleRate: Int = 0,
+    val coverPath: String? = null,
+    val coverUri: Uri? = null,
+    val files: List<AudioFile> = emptyList(),
+)
+
 @HiltViewModel(assistedFactory = AlbumDetailViewModel.Factory::class)
 class AlbumDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: AlbumDetail,
@@ -43,29 +54,13 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
-    private val _albumName = MutableStateFlow("")
-    val albumName: StateFlow<String> = _albumName.asStateFlow()
+    private val _uiState = MutableStateFlow(AlbumDetailUiState())
+    val uiState: StateFlow<AlbumDetailUiState> = _uiState.asStateFlow()
 
-    private val _albumArtist = MutableStateFlow<String?>(null)
-    val albumArtist: StateFlow<String?> = _albumArtist.asStateFlow()
-
-    private val _albumYear = MutableStateFlow<String?>(null)
-    val albumYear: StateFlow<String?> = _albumYear.asStateFlow()
-
-    private val _albumBitrate = MutableStateFlow(0)
-    val albumBitrate: StateFlow<Int> = _albumBitrate.asStateFlow()
-
-    private val _albumSampleRate = MutableStateFlow(0)
-    val albumSampleRate: StateFlow<Int> = _albumSampleRate.asStateFlow()
-
-    private val _coverPath = MutableStateFlow<String?>(null)
-    val coverPath: StateFlow<String?> = _coverPath.asStateFlow()
-
-    private val _coverUri = MutableStateFlow<Uri?>(null)
-    val coverUri: StateFlow<Uri?> = _coverUri.asStateFlow()
-
-    private val _files = MutableStateFlow<List<AudioFile>>(emptyList())
-    val files: StateFlow<List<AudioFile>> = _files.asStateFlow()
+    // Split out so async palette extraction doesn't recompose the whole screen
+    // (tracks list, header) — only consumers of the color recompose.
+    private val _dominantColor = MutableStateFlow<Color?>(null)
+    val dominantColor: StateFlow<Color?> = _dominantColor.asStateFlow()
 
     /**
      * Mirrors the global scan activity maintained by [LibraryRepository].
@@ -74,16 +69,17 @@ class AlbumDetailViewModel @AssistedInject constructor(
      */
     val isRefreshing: StateFlow<Boolean> = libraryRepository.isRefreshing
 
-    private val _dominantColor = MutableStateFlow<Color?>(null)
-    val dominantColor: StateFlow<Color?> = _dominantColor.asStateFlow()
-
     private var refreshJob: Job? = null
     private val tagLibReadCache = mutableMapOf<String, AudioMetadata>()
 
     init {
         // Pre-populate from navKey so UI shows correct name/artist from first frame
-        _albumName.update { navKey.albumName }
-        _albumArtist.update { navKey.albumArtist.takeIf { it.isNotEmpty() } }
+        _uiState.update {
+            it.copy(
+                albumName = navKey.albumName,
+                albumArtist = navKey.albumArtist.takeIf { a -> a.isNotEmpty() }
+            )
+        }
         loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
     }
 
@@ -96,15 +92,14 @@ class AlbumDetailViewModel @AssistedInject constructor(
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
         Timber.tag("Voxly").i("AlbumDetailViewModel loadAlbum: albumId=$albumName")
-        if (_albumName.value == albumName && _albumArtist.value == albumArtist && _files.value.isNotEmpty()) {
+        val current = _uiState.value
+        if (current.albumName == albumName && current.albumArtist == albumArtist && current.files.isNotEmpty()) {
             return
         }
 
         // Reset cover-related state immediately to prevent showing previous album's cover
         // during transition when ViewModel might be reused across different albums
-        _coverUri.value = null
-        _coverPath.value = null
-        _files.value = emptyList()
+        _uiState.update { it.copy(coverUri = null, coverPath = null, files = emptyList()) }
 
         viewModelScope.launch {
             try {
@@ -114,16 +109,11 @@ class AlbumDetailViewModel @AssistedInject constructor(
                 }
 
                 if (albumGroup != null) {
-                    _albumName.update { albumGroup.name }
-                    _albumArtist.update { albumGroup.albumArtist }
-                    _coverPath.update { albumGroup.coverPath }
-
                     val firstFile = albumGroup.files.firstOrNull()
                     val resolvedUri = coverUriProvider.getCoverUri(
                             albumId = firstFile?.mediaStoreAlbumId,
                             filePath = albumGroup.coverPath ?: firstFile?.path
                         )
-                    _coverUri.update { resolvedUri }
 
                     val filesWithDiscNumber = withContext(Dispatchers.Default) {
                         albumGroup.files.map { file ->
@@ -142,24 +132,30 @@ class AlbumDetailViewModel @AssistedInject constructor(
                         }
                     }
 
-                    _files.update { filesWithDiscNumber }
-
                     val albumYear = albumGroup.files.mapNotNull {
                         it.metadata.year?.trim()?.takeIf { it.isNotBlank() }
                     }.maxOrNull()
                     val maxSampleRate = albumGroup.files.maxOfOrNull { it.sampleRate } ?: 0
                     val maxBitrate = albumGroup.files.maxOfOrNull { it.bitrate } ?: 0
 
-                    _albumYear.update { albumYear }
-                    _albumSampleRate.update { maxSampleRate }
-                    _albumBitrate.update { maxBitrate }
+                    _uiState.update {
+                        it.copy(
+                            albumName = albumGroup.name,
+                            albumArtist = albumGroup.albumArtist,
+                            coverPath = albumGroup.coverPath,
+                            coverUri = resolvedUri,
+                            files = filesWithDiscNumber,
+                            albumYear = albumYear,
+                            albumSampleRate = maxSampleRate,
+                            albumBitrate = maxBitrate
+                        )
+                    }
 
                     withContext(Dispatchers.Default) {
                         extractDominantColor(albumGroup)
                     }
                 } else {
-                    _albumName.update { albumName }
-                    _albumArtist.update { albumArtist }
+                    _uiState.update { it.copy(albumName = albumName, albumArtist = albumArtist) }
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error loading album: $albumName")
@@ -208,7 +204,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
                 val color = palette.dominantSwatch?.rgb?.let { Color(it) }
                     ?: palette.vibrantSwatch?.rgb?.let { Color(it) }
                     ?: palette.mutedSwatch?.rgb?.let { Color(it) }
-                _dominantColor.update { color }
+                _dominantColor.value = color
                 bitmap.recycle()
             }
         } catch (_: Throwable) {

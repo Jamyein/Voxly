@@ -10,7 +10,7 @@ import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.ArtistDetail
-import com.voxly.presentation.ui.extractAndCacheCoverBytes
+import com.voxly.presentation.ui.extractEmbeddedCoverBytes
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.core.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -78,6 +78,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private var refreshJob: Job? = null
     private var albumYearJob: Job? = null
     private var autoScrollJob: Job? = null
+    // Set once the first auto-scroll completes — the carousel advances a single album, then rests.
+    private var autoScrollDone = false
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     private val _autoScrollTarget = MutableStateFlow<Int?>(null)
@@ -181,7 +183,6 @@ class ArtistDetailViewModel @AssistedInject constructor(
     /**
      * Precompute album cover paths for the carousel.
      * Deferred until carousel needs covers - not called on every loadArtist.
-     * Uses extractAndCacheCoverBytes which has LRU byte caching.
      */
     private fun precomputeAlbumCovers(files: List<AudioFile>) {
         viewModelScope.launch {
@@ -192,7 +193,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
 
                     val fileWithArt = albumFiles.firstOrNull { file ->
                         try {
-                            extractAndCacheCoverBytes(file.path) != null
+                            extractEmbeddedCoverBytes(file.path) != null
                         } catch (e: Exception) {
                             false
                         }
@@ -253,14 +254,16 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Schedule auto-scroll carousel to next album after 4s delay.
-     * Cancels any pending auto-scroll before scheduling a new one.
+     * Auto-scroll the carousel to the next album once, 4s after the first page settles.
+     * Stops after a single advance so the section doesn't perpetually drift while the user
+     * reads it (a standing motion concern for reduced-motion users).
      */
     fun scheduleAutoScroll(currentItem: Int, albumCount: Int) {
+        if (autoScrollDone || albumCount <= 1) return
         autoScrollJob?.cancel()
         autoScrollJob = viewModelScope.launch {
-            if (albumCount <= 1) return@launch
             delay(4000)
+            autoScrollDone = true
             _autoScrollTarget.update { (currentItem + 1) % albumCount }
         }
     }

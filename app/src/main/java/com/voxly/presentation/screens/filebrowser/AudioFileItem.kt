@@ -103,7 +103,7 @@ internal fun FileSortOption.labelResId(): Int = when (this) {
 internal fun AudioFileList(
     files: List<AudioFile>,
     listState: LazyListState,
-    selectedFiles: Set<String>,
+    selectedFilesState: State<Set<String>>,
     modifier: Modifier = Modifier,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
@@ -116,7 +116,7 @@ internal fun AudioFileList(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val isSelectionMode = selectedFiles.isNotEmpty()
+    val isSelectionMode = selectedFilesState.value.isNotEmpty()
 
     LazyColumn(
         modifier = modifier,
@@ -129,23 +129,31 @@ internal fun AudioFileList(
         )
     ) {
         items(files, key = { it.path }) { audioFile ->
+            val isSelected by remember(audioFile.path) {
+                derivedStateOf { audioFile.path in selectedFilesState.value }
+            }
             val onFileClickState by rememberUpdatedState(onFileClick)
             val onFileLongClickState by rememberUpdatedState(onFileLongClick)
+            val onEditMetadataState by rememberUpdatedState(onEditFileMetadata)
+            val onRenameState by rememberUpdatedState(onRenameFile)
+            val onDeleteState by rememberUpdatedState(onDeleteFile)
+            val onFetchOnlineState by rememberUpdatedState(onFetchOnlineMetadata)
+            val onFixMetadataState by rememberUpdatedState(onFixMetadata)
 
             val onClickCallback = remember(audioFile.path) { { onFileClickState(audioFile) } }
             val onLongClickCallback = remember(audioFile.path) { { onFileLongClickState(audioFile) } }
 
             AudioFileItem(
                 audioFile = audioFile,
-                isSelected = audioFile.path in selectedFiles,
+                isSelected = isSelected,
                 onClick = onClickCallback,
                 onLongClick = onLongClickCallback,
                 showActions = !isSelectionMode,
-                onEditMetadata = { onEditFileMetadata(audioFile) },
-                onRename = { onRenameFile(audioFile) },
-                onDelete = { onDeleteFile(audioFile) },
-                onFetchOnlineMetadata = { onFetchOnlineMetadata(audioFile) },
-                onFixMetadata = { onFixMetadata(audioFile) },
+                onEditMetadata = remember(audioFile.path) { { onEditMetadataState(audioFile) } },
+                onRename = remember(audioFile.path) { { onRenameState(audioFile) } },
+                onDelete = remember(audioFile.path) { { onDeleteState(audioFile) } },
+                onFetchOnlineMetadata = remember(audioFile.path) { { onFetchOnlineState(audioFile) } },
+                onFixMetadata = remember(audioFile.path) { { onFixMetadataState(audioFile) } },
                 sharedElementKey = createAlbumArtSharedElementKey(audioFile.path),
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope
@@ -158,7 +166,7 @@ internal fun AudioFileList(
 internal fun AudioFileListWithIndexer(
     files: List<AudioFile>,
     listState: LazyListState,
-    selectedFiles: Set<String>,
+    selectedFilesState: State<Set<String>>,
     modifier: Modifier = Modifier,
     showIndexer: Boolean = true,
     onFileClick: (AudioFile) -> Unit,
@@ -176,7 +184,7 @@ internal fun AudioFileListWithIndexer(
         AudioFileList(
             files = files,
             listState = listState,
-            selectedFiles = selectedFiles,
+            selectedFilesState = selectedFilesState,
             modifier = modifier,
             onFileClick = onFileClick,
             onFileLongClick = onFileLongClick,
@@ -192,7 +200,7 @@ internal fun AudioFileListWithIndexer(
 
         LazyListCoverPreloader(
             listState = listState,
-            filePaths = files.map { it.path }
+            covers = remember(files) { files.map { it.path to it.mediaStoreAlbumId } }
         )
 
         if (showIndexer) {

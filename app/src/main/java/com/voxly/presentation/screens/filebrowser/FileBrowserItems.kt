@@ -243,10 +243,12 @@ internal fun AlbumGridItem(
                 overflow = TextOverflow.Ellipsis,
                 modifier = if (canUseSharedTransition) {
                     with(sharedTransitionScope) {
-                        Modifier.sharedElement(
+                        Modifier.sharedBounds(
                             rememberSharedContentState(key = albumTitleKey),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = rememberSharedElementTitleBoundsTransform()
+                            boundsTransform = rememberSharedElementTitleBoundsTransform(),
+                            // Text: scale instead of re-measure so titles don't reflow mid-morph.
+                            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
                         )
                     }
                 } else Modifier
@@ -259,10 +261,11 @@ internal fun AlbumGridItem(
                 overflow = TextOverflow.Ellipsis,
                 modifier = if (canUseSharedTransition && albumArtistKey != null) {
                     with(sharedTransitionScope) {
-                        Modifier.sharedElement(
+                        Modifier.sharedBounds(
                             rememberSharedContentState(key = albumArtistKey),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = rememberSharedElementTextBoundsTransform()
+                            boundsTransform = rememberSharedElementTextBoundsTransform(),
+                            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
                         )
                     }
                 } else Modifier

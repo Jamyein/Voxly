@@ -28,6 +28,7 @@ import com.voxly.domain.usecase.SaveMetadataUseCase
 import com.voxly.presentation.components.lyricsposter.ColorExtractor
 import com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors
 import com.voxly.presentation.navigation.MetadataEditor
+import com.voxly.presentation.ui.rotateJpegBytes
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.voxly.presentation.viewmodel.SearchSeedHolder
@@ -498,6 +499,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
             val colors = albumArtBytes?.let { ColorExtractor.extractM3EColorsFromBytes(it, 200) }
             _m3eColors.update { colors }
             _isM3eColorsResolved.update { true }
+        }
+    }
+
+    fun rotateAlbumArt(degrees: Float) {
+        val bytes = _editedMetadata.value?.albumArt ?: return
+        viewModelScope.launch(Dispatchers.Default) {
+            rotateJpegBytes(bytes, degrees)?.let { updateAlbumArt(it) }
         }
     }
 

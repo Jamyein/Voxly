@@ -2,6 +2,7 @@ package com.voxly.presentation.theme
 
 import android.app.Activity
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +15,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -146,6 +148,21 @@ fun MP3TagTheme(
     // Get the appropriate tint theme
     val tintTheme = if (darkTheme) ExpressiveTintThemeDark else ExpressiveTintThemeLight
 
+    // Reduced motion: when the system animation scale is 0 ("Remove animations"), swap the whole
+    // MotionScheme to instant specs and flip LocalReducedMotion so hardcoded animations (spring
+    // fades, predictive-back tweens, shimmer) also collapse to a single frame.
+    val context = LocalContext.current
+    val reducedMotion = remember {
+        val scale = runCatching {
+            Settings.Global.getFloat(
+                context.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f
+            )
+        }.getOrDefault(1f)
+        scale == 0f
+    }
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -165,13 +182,15 @@ fun MP3TagTheme(
         // Gradient colors
         com.voxly.presentation.theme.LocalGradientColors provides gradientColors,
         // Tint theme
-        com.voxly.presentation.theme.LocalTintTheme provides tintTheme
+        com.voxly.presentation.theme.LocalTintTheme provides tintTheme,
+        // Reduced motion (system animation scale == 0)
+        LocalReducedMotion provides reducedMotion
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
             shapes = Shapes,  // Use MD3 Expressive shapes
-            motionScheme = motionScheme,
+            motionScheme = if (reducedMotion) InstantMotionScheme else motionScheme,
             content = content
         )
     }

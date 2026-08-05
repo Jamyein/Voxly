@@ -11,7 +11,6 @@ import com.voxly.domain.util.OnlineSearchSorter
 import com.voxly.presentation.navigation.OnlineCoverSearch
 import com.voxly.presentation.viewmodel.SearchSeedHolder
 import com.voxly.presentation.ui.getCoverArtBytes
-import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
@@ -31,8 +30,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import com.voxly.domain.repository.OnlineSourceResult
 import timber.log.Timber
 import java.io.File
@@ -154,7 +151,6 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
     companion object {
         private const val IMMEDIATE_DISPLAY_COUNT = 5  // 前5个结果立即显示，不排序
         private const val BATCH_UPDATE_INTERVAL_MS = 200L  // 批量更新间隔 200ms
-        private const val PREFETCH_CONCURRENCY = 3  // 图片预取并发数限制
     }
 
     private fun performCoverSearch(title: String, artist: String?) {
@@ -176,7 +172,6 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 
                 // 缓冲列表用于批量处理
                 val pendingRecordings = mutableListOf<OnlineRecording>()
-                val prefetchSemaphore = Semaphore(PREFETCH_CONCURRENCY)
                 var lastUpdateTime = System.currentTimeMillis()
                 var totalReceivedCount = 0
                 
@@ -186,16 +181,7 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                             is OnlineSourceResult.RecordingResult -> {
                                 Timber.d(TAG, "Received result from ${result.source}: ${result.recording.title}")
                                 totalReceivedCount++
-                                
-                                // 预取封面图片（限制并发数，不阻塞）
-                                result.recording.coverArtUrl?.let { url ->
-                                    launch { 
-                                        prefetchSemaphore.withPermit {
-                                            prefetchCoverArtBytes(url)
-                                        }
-                                    }
-                                }
-                                
+
                                 // 策略：前5个结果立即增量显示（不排序），后续结果批量排序
                                 if (totalReceivedCount <= IMMEDIATE_DISPLAY_COUNT) {
                                     // 立即显示，不排序

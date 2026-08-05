@@ -1,6 +1,5 @@
 package com.voxly.presentation.screens.filebrowser
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -31,8 +30,8 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.components.RoleGradientBadge
+import com.voxly.presentation.components.navBarsBottomInset
 import com.voxly.presentation.components.rememberRoleAccentAt
-import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.scaleOnPress
 import com.voxly.presentation.viewmodel.SelectedDirectory
 
@@ -152,7 +151,7 @@ fun DirectoryOverviewContent(
                             start = 12.dp,
                             end = 12.dp,
                             top = 4.dp,
-                            bottom = 8.dp + bottomPadding
+                            bottom = 8.dp + bottomPadding + navBarsBottomInset()
                         ),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -205,34 +204,29 @@ fun LoadingContent() {
  */
 @Composable
 fun EmptyContent() {
-    AnimatedVisibility(
-        visible = true,
-        enter = ExpressiveAnimations.fadeEnter()
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    painter = appIconPainter(AppIcon.MusicNote),
-                    contentDescription = stringResource(R.string.cd_no_files),
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.outline
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    stringResource(R.string.no_audio_files),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    stringResource(R.string.import_audio_files_or_select_folder),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                painter = appIconPainter(AppIcon.MusicNote),
+                contentDescription = stringResource(R.string.cd_no_files),
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                stringResource(R.string.no_audio_files),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.import_audio_files_or_select_folder),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline
+            )
         }
     }
 }

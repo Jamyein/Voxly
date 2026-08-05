@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.voxly.presentation.theme.LocalReducedMotion
 
 /**
  * Slide-in / slide-out wrapper for the floating pill bottom navigation bar.
@@ -41,6 +42,16 @@ fun AnimatedBottomBarContainer(
 ) {
     val controller = LocalBottomBarVisibilityController.current
     val isVisible = controller.isVisible
+
+    // Reduced motion: the slot collapses instantly — no 120ms shrink.
+    if (LocalReducedMotion.current) {
+        if (isVisible) {
+            Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
+                content()
+            }
+        }
+        return
+    }
 
     // We use AnimatedVisibility so the layout slot collapses on hide — that is what gives
     // the underlying LazyColumn more vertical space to scroll through. expandVertically /

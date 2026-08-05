@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.toShape
+import com.voxly.presentation.theme.LocalReducedMotion
 import com.voxly.presentation.theme.MaterialShapes
 
 /**
@@ -47,6 +48,15 @@ fun ShimmerBox(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(4.dp)
 ) {
+    // Reduced motion: render a static block instead of the infinite shimmer sweep.
+    if (LocalReducedMotion.current) {
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        )
+        return
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "skeleton")
     val shimmerX by infiniteTransition.animateFloat(
         initialValue = -200f,

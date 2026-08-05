@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -38,6 +39,15 @@ fun AlbumCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scrim = MaterialTheme.colorScheme.scrim
+    val scrimBrush = remember(scrim) {
+        Brush.verticalGradient(
+            colors = listOf(
+                scrim.copy(alpha = 0f),
+                scrim.copy(alpha = 0.6f)
+            )
+        )
+    }
     Box(
         modifier = modifier
             .clickable(onClick = onClick),
@@ -63,14 +73,7 @@ fun AlbumCard(
                 .fillMaxWidth()
                 .height(80.dp)
                 .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.scrim.copy(alpha = 0f),
-                            MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f)
-                        )
-                    )
-                )
+                .background(scrimBrush)
         )
 
         // 文字叠加层

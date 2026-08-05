@@ -5,7 +5,6 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,15 +19,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
@@ -39,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,8 +44,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voxly.R
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.components.navBarsBottomInset
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * 艺术家详情页：杂志质感大字报风格
@@ -81,7 +83,6 @@ fun ArtistDetailScreen(
     val albumCovers by viewModel.albumCovers.collectAsStateWithLifecycle()
     val albumYears by viewModel.albumYears.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val autoScrollTarget by viewModel.autoScrollTarget.collectAsStateWithLifecycle()
 
     val onRefresh: () -> Unit = {
         viewModel.refresh(forceRefresh = false)
@@ -123,11 +124,12 @@ fun ArtistDetailScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
+        VoxlyScaffold(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                TopAppBar(
+                VoxlyTopAppBar(
+                    theme = TopBarTheme.ImmersiveToSurface,
                     title = {
                         AnimatedVisibility(
                             visible = showTitle,
@@ -143,22 +145,7 @@ fun ArtistDetailScreen(
                         }
                     },
                     scrollBehavior = scrollBehavior,
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    navigationIcon = {
-                        FilledTonalIconButton(
-                            onClick = onNavigateBack,
-                            modifier = Modifier.padding(start = 12.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.back)
-                            )
-                        }
-                    }
+                    onBack = onNavigateBack
                 )
             }
         ) { innerPadding ->
@@ -172,36 +159,24 @@ fun ArtistDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding() + 24.dp,
-                        bottom = 12.dp + innerPadding.calculateBottomPadding(),
+                        bottom = 12.dp + navBarsBottomInset(),
                         start = 0.dp,
                         end = 0.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // Hero 区域：杂志大字报风格
+                    // Hero 区域：杂志大字报风格（入场交给页面过渡，不在此重复动画）
                     item {
-                        val enterAnimation = fadeIn(
-                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()
-                        ) + slideInVertically(
-                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                            initialOffsetY = { it / 4 }
+                        HeroSection(
+                            artistName = artistNameState,
+                            coverPath = coverPath,
+                            coverAlbumId = coverAlbumId,
+                            songCount = songCount,
+                            albumCount = albumCount,
+                            modifier = Modifier.padding(bottom = 24.dp),
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
-
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = enterAnimation
-                        ) {
-                            HeroSection(
-                                artistName = artistNameState,
-                                coverPath = coverPath,
-                                coverAlbumId = coverAlbumId,
-                                songCount = songCount,
-                                albumCount = albumCount,
-                                modifier = Modifier.padding(bottom = 24.dp),
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
                     }
 
                     // 单曲区域
@@ -244,13 +219,20 @@ fun ArtistDetailScreen(
                         }
 
                         item {
+                            // autoScrollTarget collected here (not at screen level) so
+                            // periodic carousel ticks don't recompose the whole screen.
+                            val autoScrollTarget by viewModel.autoScrollTarget.collectAsStateWithLifecycle()
                             val carouselState = rememberCarouselState { albumsSorted.size }
                             val albumCount = albumsSorted.size
 
-                            // 预加载相邻专辑封面
-                            LaunchedEffect(carouselState.currentItem) {
-                                viewModel.preloadAdjacentAlbumCovers(carouselState.currentItem)
-                                viewModel.scheduleAutoScroll(carouselState.currentItem, albumCount)
+                            // 预加载相邻专辑封面；对 currentItem 去重，避免轮播动画每帧重启
+                            LaunchedEffect(carouselState) {
+                                snapshotFlow { carouselState.currentItem }
+                                    .distinctUntilChanged()
+                                    .collect { page ->
+                                        viewModel.preloadAdjacentAlbumCovers(page)
+                                        viewModel.scheduleAutoScroll(page, albumCount)
+                                    }
                             }
 
                             // React to ViewModel-managed auto-scroll target
@@ -391,11 +373,13 @@ private data class AlbumInfo(
     val year: Int?
 )
 
+private val YEAR_REGEX = Regex("""\d{4}""")
+
 /**
  * 从字符串提取 4 位年份
  */
 private fun extractYear(rawYear: String?): Int? {
     val normalized = rawYear?.trim().orEmpty()
     if (normalized.isEmpty()) return null
-    return Regex("""\d{4}""").find(normalized)?.value?.toIntOrNull()
+    return YEAR_REGEX.find(normalized)?.value?.toIntOrNull()
 }

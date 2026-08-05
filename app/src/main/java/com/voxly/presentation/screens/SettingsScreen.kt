@@ -110,6 +110,9 @@ import com.voxly.presentation.components.SegmentedSwitchRow
 import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.components.SortDropdownMenu
 import com.voxly.presentation.components.SortMenuItem
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.viewmodel.SettingsViewModel
 import com.voxly.presentation.screens.settings.*
 import com.voxly.presentation.viewmodel.DragDialogState
@@ -796,27 +799,15 @@ fun SettingsScreen(
 
     val currentSeparators by viewModel.artistSeparatorsSet.collectAsStateWithLifecycle()
 
-    Scaffold(
+    VoxlyScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            MediumTopAppBar(
+            VoxlyTopAppBar(
+                large = true,
+                theme = TopBarTheme.Library,
                 title = { Text(stringResource(R.string.nav_settings)) },
                 scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    FilledTonalIconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.padding(start = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                onBack = onNavigateBack
             )
         }
     ) { innerPadding ->
@@ -1410,7 +1401,7 @@ private fun SettingsSourceDialogs(
     if (showMetadataSourceDialog) {
         LaunchedEffect(Unit) {
             if (activeDialogType != DataSourceType.METADATA) {
-                viewModel.initDragDialogState(DataSourceType.METADATA)
+                viewModel.openDialog(DataSourceType.METADATA)
                 onActiveDialogTypeChange(DataSourceType.METADATA)
             }
         }
@@ -1446,7 +1437,7 @@ private fun SettingsSourceDialogs(
     if (showLyricsSourceDialog) {
         LaunchedEffect(Unit) {
             if (activeDialogType != DataSourceType.LYRICS) {
-                viewModel.initDragDialogState(DataSourceType.LYRICS)
+                viewModel.openDialog(DataSourceType.LYRICS)
                 onActiveDialogTypeChange(DataSourceType.LYRICS)
             }
         }
@@ -1482,7 +1473,7 @@ private fun SettingsSourceDialogs(
     if (showCoverSourceDialog) {
         LaunchedEffect(Unit) {
             if (activeDialogType != DataSourceType.COVER) {
-                viewModel.initDragDialogState(DataSourceType.COVER)
+                viewModel.openDialog(DataSourceType.COVER)
                 onActiveDialogTypeChange(DataSourceType.COVER)
             }
         }

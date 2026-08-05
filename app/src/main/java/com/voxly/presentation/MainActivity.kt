@@ -57,7 +57,6 @@ class MainActivity : AppCompatActivity() {
             var isReady by remember { mutableStateOf(false) }
 
             val libraryScanViewModel: LibraryScanViewModel = hiltViewModel()
-            val isRefreshing by libraryScanViewModel.isRefreshing.collectAsStateWithLifecycle()
 
             // Trigger an incremental scan whenever the activity returns to the
             // foreground. SAF-picked whitelist directories have no filesystem
@@ -81,8 +80,13 @@ class MainActivity : AppCompatActivity() {
                 libraryScanViewModel.initializeApp()
             }
 
-            LaunchedEffect(isRefreshing) {
-                if (!isRefreshing) {
+            // Release the splash as soon as the library's initial build finished
+            // (data rendered from cache, or empty on first install). This covers
+            // both cases: cached data shows immediately, and a fresh install shows
+            // the empty state while the background scan populates it.
+            val libraryInitialized by libraryScanViewModel.libraryInitialized.collectAsStateWithLifecycle()
+            LaunchedEffect(libraryInitialized) {
+                if (libraryInitialized) {
                     isReady = true
                 }
             }

@@ -5,18 +5,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
@@ -26,12 +28,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -57,10 +56,12 @@ import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.presentation.components.NetworkCoverImage
 import com.voxly.presentation.components.SourceTag
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.theme.MaterialShapes
 import com.voxly.presentation.theme.emphasizedTitleMedium
 import androidx.compose.material3.toShape
-import com.voxly.presentation.ui.clearSearchResultImageCache
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
 import com.voxly.presentation.viewmodel.SearchProgressState
@@ -110,10 +111,11 @@ fun OnlineMetadataScreen(
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
-    Scaffold(
+    VoxlyScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            VoxlyTopAppBar(
+                theme = TopBarTheme.Library,
                 title = {
                     Column {
                         Text(
@@ -134,19 +136,7 @@ fun OnlineMetadataScreen(
                     }
                 },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                navigationIcon = {
-                    FilledTonalIconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back)
-                        )
-                    }
-                },
+                onBack = onNavigateBack,
                 actions = {
                     IconButton(
                         onClick = { viewModel.autoSearch() },
@@ -158,11 +148,12 @@ fun OnlineMetadataScreen(
             )
         }
     ) { innerPadding ->
-        // Content with innerPadding from Scaffold
+        // Edge-to-edge convention: top inset only from the Scaffold; the bottom nav-bar
+        // space is reserved explicitly at the end of the column.
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(16.dp)
         ) {
             when (val state = uiState) {
@@ -172,7 +163,6 @@ fun OnlineMetadataScreen(
                         releases = state.releases,
                         onSelect = { release ->
                             viewModel.selectRelease(release)
-                            clearSearchResultImageCache()
                         },
                         modifier = Modifier.weight(1f, fill = false)
                     )
@@ -194,7 +184,6 @@ fun OnlineMetadataScreen(
                         releases = state.releases,
                         onSelect = { release ->
                             viewModel.selectRelease(release)
-                            clearSearchResultImageCache()
                         },
                         modifier = Modifier.weight(1f, fill = false)
                     )
@@ -204,14 +193,15 @@ fun OnlineMetadataScreen(
                         releases = searchResults,
                         onSelect = { release ->
                             viewModel.selectRelease(release)
-                            clearSearchResultImageCache()
                         },
                         modifier = Modifier.weight(1f, fill = false)
                     )
                 }
             }
 
-            // 移除选择卡片UI - 点击直接应用
+            // Trailing space equal to the navigation-bar inset so the last release card
+            // clears the gesture / 3-button nav area (edge-to-edge convention).
+            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }

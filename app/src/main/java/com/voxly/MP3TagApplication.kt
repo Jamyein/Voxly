@@ -14,6 +14,7 @@ import com.voxly.core.util.LogManager
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.cover.CoverUriProvider
+import com.voxly.presentation.ui.CoverPreloadManager
 import com.voxly.presentation.ui.coil.VoxlyImageLoader
 import com.voxly.presentation.viewmodel.MediaStoreChangeWatcher
 import dagger.hilt.android.HiltAndroidApp
@@ -47,6 +48,9 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
     @Inject
     lateinit var mediaStoreChangeWatcher: MediaStoreChangeWatcher
 
+    @Inject
+    lateinit var coverPreloadManager: CoverPreloadManager
+
     override fun onCreate() {
         super.onCreate()
         @OptIn(ExperimentalComposeApi::class)
@@ -67,6 +71,11 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
 
         // Semi-automatic scanning layers (phased rollout):
         mediaStoreChangeWatcher.start()
+
+        // Keep the first screen of Albums/Artists covers hot in Coil's memory
+        // cache (reactively — driven by the unified display flows), so the first
+        // entry to those tabs renders covers synchronously with no loading flash.
+        coverPreloadManager.start()
     }
 
     override val workManagerConfiguration: Configuration

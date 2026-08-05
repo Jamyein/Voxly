@@ -5,6 +5,8 @@ import com.voxly.core.util.SortUtil
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 
+private val YEAR_REGEX = Regex("""\d{4}""")
+
 /**
  * Data class representing a group of albums by year.
  */
@@ -53,7 +55,7 @@ fun albumStableKey(album: AlbumGroup): String {
 fun extractYear(rawYear: String?): Int? {
     val normalized = rawYear?.trim().orEmpty()
     if (normalized.isEmpty()) return null
-    return Regex("""\d{4}""").find(normalized)?.value?.toIntOrNull()
+    return YEAR_REGEX.find(normalized)?.value?.toIntOrNull()
 }
 
 /**
@@ -72,7 +74,7 @@ fun applyAlbumSort(
         AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
             album.year ?: album.files.mapNotNull { audioFile ->
                 audioFile.metadata.year
-                    ?.let { Regex("""\d{4}""").find(it)?.value }
+                    ?.let { YEAR_REGEX.find(it)?.value }
                     ?.toIntOrNull()
             }.maxOrNull() ?: Int.MIN_VALUE
         }

@@ -41,6 +41,7 @@ fun LibrarySearchSheet(
         sheetState = sheetState,
         onDismiss = onDismiss,
         allFiles = scanUiState.allAudios,
-        onFileClick = onFileClick
+        onFileClick = onFileClick,
+        searchFn = { query -> scanViewModel.searchFiles(query) }
     )
 }

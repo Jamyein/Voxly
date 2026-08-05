@@ -1,12 +1,15 @@
 package com.voxly.presentation.screens.filebrowser
 
 import androidx.activity.compose.PredictiveBackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetState
@@ -44,6 +46,7 @@ import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -66,10 +69,12 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.LibraryRefreshBox
 import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyTopAppBar
+import com.voxly.presentation.components.navBarsBottomInset
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.openMetadataFor
-import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryBatchViewModel
@@ -111,7 +116,8 @@ fun DirectoryContentAdaptiveScreen(
 
     val directoryFiles by scanViewModel.directoryFiles.collectAsStateWithLifecycle()
     val sortedDirectoryFiles by scanViewModel.sortedDirectoryFiles.collectAsStateWithLifecycle()
-    val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val selectedFilesState = viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val selectedFiles = selectedFilesState.value
     val isRefreshing by scanViewModel.isRefreshing.collectAsStateWithLifecycle()
     val loadingDirectories by scanViewModel.directoryLoadingState.collectAsStateWithLifecycle()
     val currentSortOption by scanViewModel.currentDirectorySortOption.collectAsStateWithLifecycle()
@@ -211,7 +217,7 @@ fun DirectoryContentAdaptiveScreen(
                     directoryName = directoryName,
                     files = files,
                     displayedFiles = displayedFiles,
-                    selectedFiles = selectedFiles,
+                    selectedFilesState = selectedFilesState,
                     isSelectionMode = isSelectionMode,
                     isRefreshing = isRefreshing,
                     isDirectoryLoading = isDirectoryLoading,
@@ -335,7 +341,7 @@ private fun DirectoryListPane(
     directoryName: String,
     files: List<AudioFile>,
     displayedFiles: List<AudioFile>,
-    selectedFiles: Set<String>,
+    selectedFilesState: State<Set<String>>,
     isSelectionMode: Boolean,
     isRefreshing: Boolean,
     isDirectoryLoading: Boolean,
@@ -368,6 +374,7 @@ private fun DirectoryListPane(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
+    val selectedFiles = selectedFilesState.value
     Column(modifier = modifier) {
         DirectoryListTopAppBar(
             directoryName = directoryName,
@@ -393,7 +400,7 @@ private fun DirectoryListPane(
             isDirectoryLoading = isDirectoryLoading,
             isRefreshing = isRefreshing,
             isSelectionMode = isSelectionMode,
-            selectedFiles = selectedFiles,
+            selectedFilesState = selectedFilesState,
             canScrollToTop = canScrollToTop,
             listState = listState,
             scrollBehavior = scrollBehavior,
@@ -439,7 +446,9 @@ private fun DirectoryListTopAppBar(
 ) {
     var isSortExpanded by remember { mutableStateOf(false) }
 
-    MediumTopAppBar(
+    VoxlyTopAppBar(
+        large = true,
+        theme = TopBarTheme.Library,
         title = {
             if (isSelectionMode) {
                 Text("$selectedFilesSize selected")
@@ -452,25 +461,13 @@ private fun DirectoryListTopAppBar(
             }
         },
         scrollBehavior = scrollBehavior,
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-            titleContentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        navigationIcon = {
-            FilledTonalIconButton(onClick = {
-                if (isSelectionMode) {
-                    onClearSelection()
-                } else if (!isSinglePane && canCloseDetailPane) {
-                    onNavigateBackWithPane()
-                } else {
-                    onNavigateBack()
-                }
-            }) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.back)
-                )
+        onBack = {
+            if (isSelectionMode) {
+                onClearSelection()
+            } else if (!isSinglePane && canCloseDetailPane) {
+                onNavigateBackWithPane()
+            } else {
+                onNavigateBack()
             }
         },
         actions = {
@@ -520,7 +517,7 @@ private fun DirectoryListBody(
     isDirectoryLoading: Boolean,
     isRefreshing: Boolean,
     isSelectionMode: Boolean,
-    selectedFiles: Set<String>,
+    selectedFilesState: State<Set<String>>,
     canScrollToTop: Boolean,
     listState: LazyListState,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior? = null,
@@ -560,13 +557,13 @@ private fun DirectoryListBody(
                         displayedFiles = displayedFiles,
                         isDirectoryLoading = isDirectoryLoading,
                         isSelectionMode = isSelectionMode,
-                        selectedFiles = selectedFiles,
+                        selectedFilesState = selectedFilesState,
                         listState = listState,
                         onFileClick = onFileClick,
                         onFileLongClick = onFileLongClick,
                         onSingleFileRename = onSingleFileRename,
                         onSingleFileDelete = onSingleFileDelete,
-                        bottomPadding = if (isSelectionMode) 80.dp else 16.dp,
+                        bottomPadding = if (isSelectionMode) 80.dp else 16.dp + navBarsBottomInset(),
                         modifier = Modifier.fillMaxSize(),
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope
@@ -601,6 +598,7 @@ private fun DirectoryListBody(
                 shape = MaterialTheme.shapes.extraLarge,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
                     .padding(16.dp)
             ) {
                 Icon(
@@ -618,7 +616,7 @@ private fun DirectoryFileListContent(
     displayedFiles: List<AudioFile>,
     isDirectoryLoading: Boolean,
     isSelectionMode: Boolean,
-    selectedFiles: Set<String>,
+    selectedFilesState: State<Set<String>>,
     listState: LazyListState,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
@@ -641,7 +639,7 @@ private fun DirectoryFileListContent(
                 files = displayedFiles,
                 listState = listState,
                 modifier = Modifier.fillMaxSize(),
-                selectedFiles = selectedFiles,
+                selectedFilesState = selectedFilesState,
                 onFileClick = onFileClick,
                 onFileLongClick = onFileLongClick,
                 onEditFileMetadata = onFileClick,
@@ -864,29 +862,23 @@ private fun DirFileSortOption.labelResId(): Int = when (this) {
 
 @Composable
 fun DirectoryEmptyContent(modifier: Modifier = Modifier) {
-    AnimatedVisibility(
-        visible = true,
-        enter = ExpressiveAnimations.fadeEnter(),
-        modifier = modifier
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.outline
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.no_audio_files_in_directory),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.no_audio_files_in_directory),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

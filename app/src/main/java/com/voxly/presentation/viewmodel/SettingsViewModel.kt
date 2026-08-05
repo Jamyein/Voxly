@@ -19,12 +19,25 @@ import com.voxly.domain.model.SourceConfigurations
 import com.voxly.presentation.screens.settings.SettingsUiState
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import timber.log.Timber
 
 /** Timeout for StateFlow sharing in milliseconds */
 private const val STATE_FLOW_TIMEOUT_MS = 5000L
+
+/**
+ * Transient UI-only state for the source priority dialog: which dialog is open and the
+ * current visual order of source IDs while dragging. Enabled flags / extra options are
+ * intentionally NOT copied here — [dragDialogState] derives them live from DataStore so
+ * switch toggles reflect immediately in the open dialog.
+ */
+data class DragInteraction(
+    val sourceType: DataSourceType? = null,
+    val order: List<String> = emptyList(),
+    val draggedIndex: Int? = null,
+    val dragOffset: Float = 0f,
+    val originalDragIndex: Int? = null
+)
 
 /**
  * UI state for the drag-to-reorder source priority dialog.
@@ -57,10 +70,10 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     /**
-     * Drag dialog state - manages UI state for the draggable source priority dialog
+     * Transient drag interaction for the source priority dialog. Only the open type and
+     * the in-drag source ID order live here; item details are derived in [dragDialogState].
      */
-    private val _dragDialogState = MutableStateFlow<DragDialogState?>(null)
-    val dragDialogState: StateFlow<DragDialogState?> = _dragDialogState.asStateFlow()
+    private val _dragInteraction = MutableStateFlow(DragInteraction())
 
     // ==================== Settings Data (from DataStore) ====================
     // Individual properties below are used in methods or UI. All other settings
@@ -76,6 +89,38 @@ class SettingsViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = SourceConfigurations()
         )
+
+    /**
+     * Drag dialog state — derived (not snapshotted) from persisted source configurations
+     * plus the transient drag interaction. Deriving keeps the open dialog's switches and
+     * iTunes country in sync with DataStore immediately, without re-opening the dialog.
+     */
+    val dragDialogState: StateFlow<DragDialogState?> = combine(
+        sourceConfigurations,
+        _dragInteraction
+    ) { config, interaction ->
+        val type = interaction.sourceType ?: return@combine null
+        val typeConfig = config.getConfig(type)
+        DragDialogState(
+            sourceType = type,
+            sources = interaction.order.map { sourceId ->
+                val source = typeConfig.getSource(sourceId)
+                DragDialogSourceItem(
+                    sourceId = sourceId,
+                    enabled = source?.enabled ?: false,
+                    order = source?.order ?: 0,
+                    extraOptions = source?.extraOptions ?: emptyMap()
+                )
+            },
+            draggedIndex = interaction.draggedIndex,
+            dragOffset = interaction.dragOffset,
+            originalDragIndex = interaction.originalDragIndex
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+        initialValue = null
+    )
 
     /**
      * Artist separators as Set<String> for UI layer (collected directly in SettingsScreen)
@@ -386,39 +431,28 @@ class SettingsViewModel @Inject constructor(
     // ==================== Drag Dialog State Management ====================
 
     /**
-     * Initialize drag dialog state from source configurations
+     * Open the priority dialog for a source type. Snapshots only the transient ordering
+     * (source IDs); enabled/extraOptions stay derived from DataStore via [dragDialogState].
      */
-    fun initDragDialogState(type: DataSourceType) {
-        val config = sourceConfigurations.value.getConfig(type)
-        val sortedSources = config.sources.sortedBy { it.order }
-        _dragDialogState.update {
-            DragDialogState(
-                sourceType = type,
-                sources = sortedSources.map {
-                    DragDialogSourceItem(
-                        sourceId = it.sourceId,
-                        enabled = it.enabled,
-                        order = it.order,
-                        extraOptions = it.extraOptions
-                    )
-                }
-            )
-        }
+    fun openDialog(type: DataSourceType) {
+        val order = sourceConfigurations.value.getConfig(type)
+            .sources.sortedBy { it.order }.map { it.sourceId }
+        _dragInteraction.value = DragInteraction(sourceType = type, order = order)
     }
 
     /**
      * Clear drag dialog state
      */
     fun clearDragDialogState() {
-        _dragDialogState.update { null }
+        _dragInteraction.value = DragInteraction()
     }
 
     /**
      * Start dragging an item
      */
     fun startDragging(index: Int) {
-        _dragDialogState.update {
-            it?.copy(
+        _dragInteraction.update {
+            it.copy(
                 originalDragIndex = index,
                 draggedIndex = index,
                 dragOffset = 0f
@@ -430,29 +464,29 @@ class SettingsViewModel @Inject constructor(
      * Update drag offset and swap items if needed
      */
     fun updateDragOffset(offset: Float, itemHeightPx: Float) {
-        val currentState = _dragDialogState.value ?: return
-        val draggedIdx = currentState.draggedIndex ?: return
+        val current = _dragInteraction.value
+        val draggedIdx = current.draggedIndex ?: return
 
-        val newDragOffset = currentState.dragOffset + offset
+        val newDragOffset = current.dragOffset + offset
         val offsetInItems = newDragOffset / itemHeightPx
         val newTargetIndex = (draggedIdx + offsetInItems.toInt())
-            .coerceIn(0, currentState.sources.lastIndex)
+            .coerceIn(0, current.order.lastIndex)
 
-        if (newTargetIndex != draggedIdx && newTargetIndex in currentState.sources.indices) {
+        if (newTargetIndex != draggedIdx && newTargetIndex in current.order.indices) {
             // Swap items in the list
-            val newList = currentState.sources.toMutableList()
+            val newList = current.order.toMutableList()
             val item = newList.removeAt(draggedIdx)
             newList.add(newTargetIndex, item)
 
-            _dragDialogState.update {
-                currentState.copy(
-                    sources = newList,
+            _dragInteraction.update {
+                current.copy(
+                    order = newList,
                     draggedIndex = newTargetIndex,
                     dragOffset = 0f
                 )
             }
         } else {
-            _dragDialogState.update { currentState.copy(dragOffset = newDragOffset) }
+            _dragInteraction.update { current.copy(dragOffset = newDragOffset) }
         }
     }
 
@@ -460,18 +494,18 @@ class SettingsViewModel @Inject constructor(
      * End dragging and persist the reordered list
      */
     fun endDragging() {
-        val currentState = _dragDialogState.value ?: return
-        val originalIdx = currentState.originalDragIndex
-        val currentIdx = currentState.draggedIndex
+        val current = _dragInteraction.value
+        val type = current.sourceType ?: return
+        val originalIdx = current.originalDragIndex
+        val currentIdx = current.draggedIndex
 
         // Persist if order changed
         if (originalIdx != null && originalIdx != currentIdx) {
-            val reorderedIds = currentState.sources.map { it.sourceId }
-            reorderSources(currentState.sourceType, reorderedIds)
+            reorderSources(type, current.order)
         }
 
-        _dragDialogState.update {
-            currentState.copy(
+        _dragInteraction.update {
+            current.copy(
                 draggedIndex = null,
                 dragOffset = 0f,
                 originalDragIndex = null
@@ -483,15 +517,15 @@ class SettingsViewModel @Inject constructor(
      * Cancel dragging and revert to original order
      */
     fun cancelDragging() {
-        val currentState = _dragDialogState.value ?: return
-        val originalIdx = currentState.originalDragIndex
+        val current = _dragInteraction.value
+        val originalIdx = current.originalDragIndex
 
         if (originalIdx != null) {
             // Re-fetch original order from persistent storage
-            initDragDialogState(currentState.sourceType)
+            current.sourceType?.let { openDialog(it) }
         } else {
-            _dragDialogState.update {
-                currentState.copy(
+            _dragInteraction.update {
+                current.copy(
                     draggedIndex = null,
                     dragOffset = 0f,
                     originalDragIndex = null

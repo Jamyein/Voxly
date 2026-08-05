@@ -8,6 +8,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.ArcMode
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
@@ -24,9 +25,11 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.scale
@@ -45,7 +48,30 @@ import androidx.compose.ui.unit.IntOffset
  * - **slow** — full-screen page transitions (spatial + effects)
  * - **fast** — small components, list items, dialogs (spatial + effects)
  * - **tween** — gestures (predictive back) are time-based, not springs
+ *
+ * Reduced motion: when the system animation scale is 0 (Settings → "Remove animations"),
+ * [LocalReducedMotion] flips true. All spring-scheme specs collapse via [InstantMotionScheme]
+ * (swapped at the theme root), and the few hardcoded specs below (spring fades, predictive-back
+ * tweens, title arc) return [EnterTransition.None]/[ExitTransition.None]/instant bounds instead.
  */
+
+/** True when the system animation scale is 0. Provided by [MP3TagTheme] from the OS setting. */
+val LocalReducedMotion = staticCompositionLocalOf { false }
+
+/**
+ * Motion scheme whose every spec is instant (`tween(0)`). Used under reduced motion: swapping the
+ * active scheme makes every spring-based animation in the app (page transitions, shared-element
+ * bounds, press feedback, connected-button weights, expand/collapse) collapse to one frame — the
+ * M3 "swap the default motion scheme per element" (Level 3) pattern, applied at the root.
+ */
+val InstantMotionScheme: MotionScheme = object : MotionScheme {
+    override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = tween(0)
+    override fun <T> fastSpatialSpec(): FiniteAnimationSpec<T> = tween(0)
+    override fun <T> slowSpatialSpec(): FiniteAnimationSpec<T> = tween(0)
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = tween(0)
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = tween(0)
+    override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> = tween(0)
+}
 
 /** Predictive-back gesture curve per M3 spec. */
 private val PredictiveBackInterpolator = CubicBezierEasing(0.1f, 0.1f, 0f, 1f)
@@ -84,6 +110,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun containerTransformSharedElementEnter(): EnterTransition {
+        if (LocalReducedMotion.current) return EnterTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             fadeIn(animationSpec = PageFadeSpring) +
@@ -93,6 +120,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun containerTransformSharedElementExit(): ExitTransition {
+        if (LocalReducedMotion.current) return ExitTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             fadeOut(animationSpec = PageFadeSpring) +
@@ -102,6 +130,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun containerTransformSharedElementPopEnter(): EnterTransition {
+        if (LocalReducedMotion.current) return EnterTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             scaleIn(initialScale = 0.97f, animationSpec = scheme.slowSpatialSpec()) +
@@ -111,6 +140,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun containerTransformSharedElementPopExit(): ExitTransition {
+        if (LocalReducedMotion.current) return ExitTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             fadeOut(animationSpec = PageFadeSpring) +
@@ -122,6 +152,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun containerTransformPredictiveBackEnter(): EnterTransition {
+        if (LocalReducedMotion.current) return EnterTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             slideInHorizontally(
@@ -134,6 +165,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun containerTransformPredictiveBackExit(): ExitTransition {
+        if (LocalReducedMotion.current) return ExitTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             slideOutHorizontally(
@@ -148,6 +180,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun sharedAxisXEnter(): EnterTransition {
+        if (LocalReducedMotion.current) return EnterTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             slideInHorizontally(
@@ -159,6 +192,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun sharedAxisXExit(): ExitTransition {
+        if (LocalReducedMotion.current) return ExitTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             slideOutHorizontally(
@@ -170,6 +204,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun sharedAxisXPopEnter(): EnterTransition {
+        if (LocalReducedMotion.current) return EnterTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             slideInHorizontally(
@@ -181,6 +216,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun sharedAxisXPopExit(): ExitTransition {
+        if (LocalReducedMotion.current) return ExitTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             slideOutHorizontally(
@@ -194,6 +230,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun fadePageEnter(): EnterTransition {
+        if (LocalReducedMotion.current) return EnterTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             fadeIn(animationSpec = PageFadeSpring) +
@@ -203,6 +240,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun fadePageExit(): ExitTransition {
+        if (LocalReducedMotion.current) return ExitTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             fadeOut(animationSpec = PageFadeSpring) +
@@ -214,6 +252,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun fadeEnter(): EnterTransition {
+        if (LocalReducedMotion.current) return EnterTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             fadeIn(animationSpec = scheme.fastEffectsSpec()) +
@@ -223,6 +262,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun fadeExit(): ExitTransition {
+        if (LocalReducedMotion.current) return ExitTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             fadeOut(animationSpec = scheme.fastEffectsSpec()) +
@@ -234,6 +274,7 @@ object ExpressiveAnimations {
 
     @Composable
     fun listItemEnter(): EnterTransition {
+        if (LocalReducedMotion.current) return EnterTransition.None
         val scheme = MaterialTheme.motionScheme
         return remember(scheme) {
             slideInVertically(
@@ -273,12 +314,19 @@ fun rememberSharedElementTextBoundsTransform(): BoundsTransform {
  * it travels between list and detail, matching the app's expressive personality.
  */
 @Composable
-fun rememberSharedElementTitleBoundsTransform(): BoundsTransform = remember {
-    BoundsTransform { initialBounds, targetBounds ->
-        keyframes {
-            durationMillis = 400
-            initialBounds at 0 using ArcMode.ArcBelow using FastOutSlowInEasing
-            targetBounds at 400
+fun rememberSharedElementTitleBoundsTransform(): BoundsTransform {
+    val reducedMotion = LocalReducedMotion.current
+    return remember {
+        if (reducedMotion) {
+            BoundsTransform { _, _ -> tween(durationMillis = 0) }
+        } else {
+            BoundsTransform { initialBounds, targetBounds ->
+                keyframes {
+                    durationMillis = 400
+                    initialBounds at 0 using ArcMode.ArcBelow using FastOutSlowInEasing
+                    targetBounds at 400
+                }
+            }
         }
     }
 }
@@ -294,11 +342,15 @@ fun Modifier.scaleOnPress(
     pressedScale: Float = 0.96f,
     label: String = "scaleOnPress",
 ): Modifier = composed {
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) pressedScale else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = label,
-    )
-    Modifier.scale(scale)
+    if (LocalReducedMotion.current) {
+        this
+    } else {
+        val isPressed by interactionSource.collectIsPressedAsState()
+        val scale by animateFloatAsState(
+            targetValue = if (isPressed) pressedScale else 1f,
+            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+            label = label,
+        )
+        Modifier.scale(scale)
+    }
 }

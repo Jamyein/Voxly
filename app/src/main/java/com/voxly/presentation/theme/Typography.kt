@@ -4,26 +4,98 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
+import com.voxly.R
 
 /**
  * Material Design 3 Expressive Typography configuration.
- * 
+ *
  * M3 Expressive特点：
  * 1. 更强的标题字重对比（headline使用SemiBold/Bold）
- * 2. 支持Variable Font（Roboto Flex）
+ * 2. 支持Variable Font（Google Sans Flex）
  * 3. 更灵活的letterSpacing
- * 
+ *
  * 字体选择策略：
- * - 优先使用系统默认字体以确保性能
- * - 可选：添加Google Fonts的Roboto Flex以获得Variable Font支持
+ * - 默认字体为 Google Sans Flex（OFL 1.1），一个 variable font 覆盖全部字重
+ *   （wght 轴 100..1000），无需为每个字重打包独立文件
+ * - Google Sans Flex 仅含 Latin/Latin-Ext/Vietnamese 字形；中文（CJK）无字形，
+ *   会自动回退到系统字体（与 ReadYou、Google 自家 App 的做法一致）
  */
 
-// 默认字体（系统字体，性能最佳）
-private val DefaultFontFamily = FontFamily.Default
+// ---- Google Sans Flex variable font family ----
+// 同一份 TTF 以不同 FontVariation 声明多个 Font 条目，Compose 的 FontMatcher
+// 按请求字重命中最近条目并应用对应的 variation settings。
+
+private val GoogleSansFlexRegular = Font(
+    R.font.google_sans_flex,
+    weight = FontWeight.Normal,
+    variationSettings = FontVariation.Settings(FontVariation.weight(400)),
+)
+
+private val GoogleSansFlexMedium = Font(
+    R.font.google_sans_flex,
+    weight = FontWeight.Medium,
+    variationSettings = FontVariation.Settings(FontVariation.weight(500)),
+)
+
+private val GoogleSansFlexSemiBold = Font(
+    R.font.google_sans_flex,
+    weight = FontWeight.SemiBold,
+    variationSettings = FontVariation.Settings(FontVariation.weight(600)),
+)
+
+private val GoogleSansFlexBold = Font(
+    R.font.google_sans_flex,
+    weight = FontWeight.Bold,
+    variationSettings = FontVariation.Settings(FontVariation.weight(700)),
+)
+
+private val GoogleSansFlexExtraBold = Font(
+    R.font.google_sans_flex,
+    weight = FontWeight.ExtraBold,
+    variationSettings = FontVariation.Settings(FontVariation.weight(800)),
+)
+
+// 斜体：Google Sans Flex 用 slnt 轴（-10..0），而非 ital 轴
+private fun googleSansFlexItalic(weight: Int, fontWeight: FontWeight) = Font(
+    R.font.google_sans_flex,
+    weight = fontWeight,
+    style = FontStyle.Italic,
+    variationSettings = FontVariation.Settings(
+        FontVariation.weight(weight),
+        FontVariation.slant(-10f),
+    ),
+)
+
+private val GoogleSansFlexRegularItalic = googleSansFlexItalic(400, FontWeight.Normal)
+private val GoogleSansFlexMediumItalic = googleSansFlexItalic(500, FontWeight.Medium)
+private val GoogleSansFlexSemiBoldItalic = googleSansFlexItalic(600, FontWeight.SemiBold)
+private val GoogleSansFlexBoldItalic = googleSansFlexItalic(700, FontWeight.Bold)
+private val GoogleSansFlexExtraBoldItalic = googleSansFlexItalic(800, FontWeight.ExtraBold)
+
+/**
+ * 默认字体族：Google Sans Flex variable font。
+ * 首个无 variation 的条目作为兜底（渲染默认实例），其余条目按字重/斜体命中。
+ */
+private val DefaultFontFamily = FontFamily(
+    Font(R.font.google_sans_flex),
+    GoogleSansFlexRegular,
+    GoogleSansFlexMedium,
+    GoogleSansFlexSemiBold,
+    GoogleSansFlexBold,
+    GoogleSansFlexExtraBold,
+    GoogleSansFlexRegularItalic,
+    GoogleSansFlexMediumItalic,
+    GoogleSansFlexSemiBoldItalic,
+    GoogleSansFlexBoldItalic,
+    GoogleSansFlexExtraBoldItalic,
+)
 
 /**
  * Line height style configuration for consistent vertical rhythm

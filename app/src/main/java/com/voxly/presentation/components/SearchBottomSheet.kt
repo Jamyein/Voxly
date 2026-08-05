@@ -31,8 +31,10 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,16 +45,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 
 
 /**
  * Reusable search bottom sheet component for searching audio files.
  *
- * @param sheetState The state of the bottom sheet
- * @param onDismiss Callback when the sheet is dismissed
- * @param allFiles The list of all audio files to search through
- * @param onFileClick Callback when a search result is clicked
- * @param modifier Modifier for the sheet
+ * When [searchFn] is provided (e.g. FTS-backed), results come from the
+ * external function fed by the debounced query. When null, falls back to
+ * in-memory filtering over [allFiles].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,18 +64,41 @@ fun SearchBottomSheet(
     onDismiss: () -> Unit,
     allFiles: List<AudioFile>,
     onFileClick: (AudioFile) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    searchFn: ((String) -> Flow<List<AudioFile>>)? = null,
 ) {
-    // Internal search state - independent from main list
     var localSearchQuery by remember { mutableStateOf("") }
 
-    // Internal search logic - independent from main list
-    // Minimum 2 characters to avoid excessive filtering on large libraries
-    val searchResults = remember(localSearchQuery, allFiles) {
+    // Debounced query — 250ms after the last keystroke.
+    val debouncedQuery by produceState(
+        initialValue = "",
+        key1 = localSearchQuery
+    ) {
         if (localSearchQuery.length < 2) {
-            emptyList()
-        } else {
-            val query = localSearchQuery.lowercase()
+            value = ""
+            return@produceState
+        }
+        delay(250)
+        value = localSearchQuery
+    }
+
+    // FTS-backed search: collect from external flow when wired.
+    var ftsResults by remember { mutableStateOf<List<AudioFile>>(emptyList()) }
+    if (searchFn != null) {
+        LaunchedEffect(debouncedQuery) {
+            if (debouncedQuery.isEmpty()) {
+                ftsResults = emptyList()
+            } else {
+                searchFn(debouncedQuery).collect { ftsResults = it }
+            }
+        }
+    }
+
+    // Local fallback
+    val localResults = remember(debouncedQuery, allFiles) {
+        if (debouncedQuery.isEmpty()) emptyList()
+        else {
+            val query = debouncedQuery.lowercase()
             allFiles.filter { audioFile ->
                 audioFile.name.lowercase().contains(query) ||
                 audioFile.metadata.title?.lowercase()?.contains(query) == true ||
@@ -81,6 +107,8 @@ fun SearchBottomSheet(
             }
         }
     }
+
+    val searchResults = if (searchFn != null) ftsResults else localResults
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

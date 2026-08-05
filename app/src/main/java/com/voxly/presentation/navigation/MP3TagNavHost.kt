@@ -10,6 +10,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -416,12 +417,29 @@ fun MP3TagNavHost() {
                     }
                 }
             }
-        ) { _ ->
-            // Note: we deliberately do NOT apply `padding` from the outer Scaffold here.
-            // With `contentWindowInsets = WindowInsets(0)`, the outer Scaffold's contentPadding
-            // is all zeros, so applying it would be a no-op — but we leave the `padding` arg
-            // unnamed to make the intent obvious: each inner screen Scaffold handles its own
-            // window insets (status bar via TopAppBar, gesture nav via contentPadding on lists).
+        ) { innerPadding ->
+            // Reserve the bottomBar slot ONLY for the opaque M3 NavigationBar (non-floating),
+            // whose surface the list must clear. The floating pill instead OVERLAYS the content:
+            // Scaffold draws the bottomBar on top of the content (BottomBarZIndex > ContentZIndex),
+            // so content runs edge-to-edge behind the pill — reserving innerPadding there would
+            // leave a tall band of the Scaffold's containerColor (near-black in dark theme)
+            // between the list and the pill. Even with contentWindowInsets = WindowInsets(0),
+            // innerPadding.bottom equals the bar's measured height whenever the bottomBar slot is
+            // non-empty, and collapses to zero when the bar hides. consumeWindowInsets forwards
+            // the reservation to inner screens so their own navigationBar paddings (FAB, list
+            // contentPadding) don't double up.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (floatingBottomNavEnabled) {
+                            // Floating pill: no reservation — content stays edge-to-edge under it.
+                            Modifier
+                        } else {
+                            Modifier.padding(innerPadding).consumeWindowInsets(innerPadding)
+                        }
+                    )
+            ) {
             if (isExpandedWidth) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     // 大屏 + 悬浮底栏开启 → 不渲染 rail,把整行让给内容
@@ -503,6 +521,7 @@ fun MP3TagNavHost() {
                     navDisplayContent()
                 }
             }
+            }   // closes the innerPadding Box
         }
         }   // closes ProvideBottomBarVisibilityController
     }       // closes SharedTransitionLayout
@@ -1025,7 +1044,10 @@ private fun ArtistDetailEntry(
  * the previous [MetadataEditor] entry on the back stack. Same `sceneKey` ⇒ same scene group;
  * we use the audio file path because only one Online* search is open per file at a time.
  */
-private fun isMainScreenKey(key: Any?): Boolean = key in BottomNavItem.entries.map { it.key }
+// Settings is a pushed page (pushed via onNavigateToSettings), not a tab — its own TopAppBar
+// back arrow handles navigation back, so it gets full-screen space like the detail screens.
+private fun isMainScreenKey(key: Any?): Boolean =
+    key != Settings && key in BottomNavItem.entries.map { it.key }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 private fun supportingPaneExtraMetadata(sceneKey: Any): Map<String, Any> =

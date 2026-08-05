@@ -1,18 +1,14 @@
 package com.voxly.presentation.viewmodel
 
-import android.content.Context
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
-import com.voxly.domain.repository.LibraryRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.usecase.SaveMetadataResult
 import com.voxly.domain.usecase.SaveMetadataUseCase
-import coil3.SingletonImageLoader
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -34,10 +30,8 @@ sealed class MetadataSaveCoordinatorResult {
 
 @Singleton
 class MetadataSaveCoordinator @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val saveMetadataUseCase: SaveMetadataUseCase,
     private val replayGainRepository: ReplayGainRepository,
-    private val libraryRepository: LibraryRepository,
     private val musicLibraryCache: MusicLibraryCache,
     private val audioFileScanner: AudioFileScanner,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope
@@ -88,9 +82,8 @@ class MetadataSaveCoordinator @Inject constructor(
                     }
 
                     applicationScope.launch {
-                        // Sync straight to the cache — no event-bus hop, so it
-                        // can't be dropped if no VM collector is alive.
-                        libraryRepository.syncFile(filePath)
+                        // updateMetadata already synced the file to cache; mark the
+                        // user edit and invalidate only the affected covers.
                         musicLibraryCache.markFileAsEditedByUser(filePath)
 
                         val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)
@@ -104,8 +97,6 @@ class MetadataSaveCoordinator @Inject constructor(
                         }
 
                         CoverUriProvider.invalidateFilePath(filePath)
-                        SingletonImageLoader.get(context).memoryCache?.clear()
-                        SingletonImageLoader.get(context).diskCache?.clear()
                     }
 
                     MetadataSaveCoordinatorResult.Success(

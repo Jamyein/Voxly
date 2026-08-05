@@ -1,6 +1,5 @@
 package com.voxly.presentation.screens.artist
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -8,7 +7,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,13 +22,11 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,11 +47,15 @@ import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.LibraryRefreshBox
+import com.voxly.presentation.components.LazyGridCoverPreloader
 import com.voxly.presentation.components.LocalBottomBarVisibilityController
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.components.chainNestedScrollConnections
+import com.voxly.presentation.components.libraryContentPadding
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
-import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
 
@@ -96,16 +96,21 @@ internal fun ArtistScreenContent(
     }
 
     LaunchedEffect(Unit) {
-        if (artists.isEmpty() && !isRefreshing) {
+        // Only auto-refresh on a fresh install (empty cache). With cached data
+        // the aggregator's direct cache read fills the list without a scan, so
+        // this would otherwise flash the skeleton + pull-to-refresh each cold start.
+        if (artists.isEmpty() && !isRefreshing && !viewModel.hasCachedData()) {
             viewModel.refresh()
         }
     }
 
-    Scaffold(
+    VoxlyScaffold(
         modifier = Modifier.nestedScroll(chainedNestedScroll),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            MediumTopAppBar(
+            VoxlyTopAppBar(
+                large = true,
+                theme = TopBarTheme.Library,
                 title = {
                     Box(
                         modifier = Modifier
@@ -119,17 +124,11 @@ internal fun ArtistScreenContent(
                             }
                     ) {
                         Text(
-                            text = stringResource(R.string.tab_artists),
-                            style = MaterialTheme.typography.titleLarge
+                            text = stringResource(R.string.tab_artists)
                         )
                     }
                 },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
                 actions = {
                     IconButton(onClick = onShowSearchSheet) {
                         Icon(
@@ -152,17 +151,12 @@ internal fun ArtistScreenContent(
                 scrollBehavior = scrollBehavior
             ) {
                 if (artists.isEmpty() && !isRefreshing) {
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = ExpressiveAnimations.fadeEnter()
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = stringResource(R.string.no_artists_found),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = stringResource(R.string.no_artists_found),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
                     ArtistTabContent(
@@ -195,7 +189,7 @@ internal fun ArtistTabContent(
         artists.associateBy { it.name }
     }
 
-    val bubbleFormatter: ((Int) -> String) = remember(artistListItems.size) {
+    val bubbleFormatter: ((Int) -> String) = remember(artistListItems) {
         { index: Int ->
             artistListItems.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
         }
@@ -215,7 +209,7 @@ internal fun ArtistTabContent(
                 state = lazyGridState,
                 columns = GridCells.Adaptive(minSize = 160.dp),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                contentPadding = libraryContentPadding(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -240,6 +234,13 @@ internal fun ArtistTabContent(
                     }
                 }
             }
+
+            LazyGridCoverPreloader(
+                gridState = lazyGridState,
+                covers = remember(artistListItems) {
+                    artistListItems.map { it.coverPath to it.coverAlbumId }
+                }
+            )
         }
 
         if (artistListItems.isNotEmpty()) {

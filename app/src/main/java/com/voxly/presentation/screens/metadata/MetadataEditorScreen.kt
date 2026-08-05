@@ -24,6 +24,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -53,6 +58,7 @@ import com.voxly.R
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.ui.bitmapToJpegBytes
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -235,7 +241,7 @@ fun MetadataEditorScreen(
 
     val dynamicPalette by produceState<MetadataEditorDynamicPalette?>(
         initialValue = null,
-        albumArtBytes?.contentHashCode(),
+        albumArtBytes,
         mediaStoreAlbumId,
         isDarkTheme,
         metadataEditorDynamicAlbumColor
@@ -273,8 +279,7 @@ fun MetadataEditorScreen(
                     onMoreOptions = { showMoreOptionsSheet = true },
                     scrollBehavior = scrollBehavior
                 )
-            },
-            floatingActionButton = {}
+            }
         ) { innerPadding ->
             Surface(
                 modifier = Modifier
@@ -289,7 +294,7 @@ fun MetadataEditorScreen(
                 audioFile = (uiState as? MetadataEditorUiState.Success)?.audioFile,
                 albumArt = editedMetadata?.albumArt,
                 mediaStoreAlbumId = (uiState as? MetadataEditorUiState.Success)?.audioFile?.mediaStoreAlbumId,
-                bottomPadding = innerPadding.calculateBottomPadding() + 80.dp,
+                bottomPadding = WindowInsets.navigationBars.exclude(WindowInsets.ime).asPaddingValues().calculateBottomPadding() + 80.dp,
                 modifiedFields = modifiedFields,
                 coverTag = coverTag,
                 hasUnsavedChanges = hasUnsavedChanges,
@@ -312,11 +317,7 @@ fun MetadataEditorScreen(
                 },
                 onPickAlbumArt = { showAlbumArtOptions = true },
                 onZoomAlbumArt = { showAlbumArtPreview = true },
-                onRotateAlbumArt = {
-                    editedMetadata?.albumArt?.let { bytes ->
-                        rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
-                    }
-                },
+                onRotateAlbumArt = { viewModel.rotateAlbumArt(90f) },
                 onRemoveAlbumArt = { viewModel.updateAlbumArt(null) },
                 onScanReplayGain = { viewModel.scanReplayGain() },
                 onClearReplayGain = { viewModel.clearReplayGainInfo() },
@@ -375,11 +376,7 @@ fun MetadataEditorScreen(
         onTakePhoto = { launcherState.cameraLauncher.launch(null) },
         onFetchOnlineCover = onNavigateToOnlineCoverSearch,
         onViewArt = { showAlbumArtPreview = true },
-        onRotateArt = {
-            editedMetadata?.albumArt?.let { bytes ->
-                rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
-            }
-        },
+        onRotateArt = { viewModel.rotateAlbumArt(90f) },
         onRemoveArt = { viewModel.updateAlbumArt(null) },
         showAlbumArtPreview = showAlbumArtPreview,
         onShowAlbumArtPreviewChange = { showAlbumArtPreview = it },
@@ -986,6 +983,9 @@ private fun MetadataEditorTopAppBar(
     scrollBehavior: TopAppBarScrollBehavior? = null,
     modifier: Modifier = Modifier
 ) {
+    // Deliberately a bespoke top bar (not the shared VoxlyTopAppBar): the editor runs under a
+    // dynamic-color theme where the container MUST follow background/onBackground from the
+    // dynamic palette, not the static surface tokens.
     TopAppBar(
         title = { Text(stringResource(R.string.edit_metadata)) },
         scrollBehavior = scrollBehavior,

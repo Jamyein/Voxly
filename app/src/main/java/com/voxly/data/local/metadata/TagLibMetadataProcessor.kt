@@ -27,7 +27,7 @@ import java.text.Normalizer
 import javax.inject.Inject
 import com.voxly.core.util.Constants
 import com.voxly.core.util.PathUtils
-import com.voxly.presentation.ui.extractAndCacheCoverBytes
+import com.voxly.presentation.ui.extractEmbeddedCoverBytes
 import javax.inject.Singleton
 
 // Common base directories for path normalization
@@ -337,7 +337,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 getFromMemoryCache(normalizedPath)?.let { cached ->
                     Timber.tag(TAG).d("Memory cache hit for: $filePath")
                     val albumArt = if (includeAlbumArt) {
-                        extractAndCacheCoverBytes(normalizedPath)
+                        extractEmbeddedCoverBytes(normalizedPath)
                     } else null
                     return@withContext CompleteMetadata(
                         metadata = cached.metadata,
@@ -377,7 +377,7 @@ class TagLibMetadataProcessor @Inject constructor(
                             )
                             return@withContext cachedMetadata
                         } else if (hasValidAudioInfo) {
-                            val cachedAlbumArt = extractAndCacheCoverBytes(normalizedPath)
+                            val cachedAlbumArt = extractEmbeddedCoverBytes(normalizedPath)
                             if (cachedAlbumArt != null) {
                                 Timber.tag(TAG).d("Album art cache hit for: $filePath")
                                 val cachedMetadata = CompleteMetadata(
@@ -419,11 +419,6 @@ class TagLibMetadataProcessor @Inject constructor(
             completeMetadata?.let { metadata ->
                 val entry = metadata.toCacheEntry(resolvedFile.absolutePath, resolvedFile.lastModified())
                 putInMemoryCache(entry)
-                
-                // OPTIMIZATION: Cache album art bytes for direct access
-                metadata.albumArt?.let { artBytes ->
-                    extractAndCacheCoverBytes(resolvedFile.absolutePath)
-                }
             }
 
             completeMetadata
@@ -1172,9 +1167,6 @@ class TagLibMetadataProcessor @Inject constructor(
                     output.flush()
                 }
             }
-
-            // Give system time to persist
-            kotlinx.coroutines.delay(500)
 
             Result.success(Unit)
         } catch (e: Exception) {

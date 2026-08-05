@@ -19,7 +19,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -29,6 +33,8 @@ import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.decodeBitmapFromBytes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Album art display section with placeholder and click handler.
@@ -55,13 +61,17 @@ fun AlbumArtSection(
             contentAlignment = Alignment.Center
         ) {
             if (albumArt != null) {
-                val bitmap = remember(albumArt.contentHashCode()) {
-                    decodeAlbumArtPreview(albumArt)
+                // Decode off the main thread; key by reference (not contentHashCode,
+                // which would rescan the whole byte array on every recomposition).
+                var bitmap by remember(albumArt) { mutableStateOf<Bitmap?>(null) }
+                LaunchedEffect(albumArt) {
+                    bitmap = withContext(Dispatchers.Default) { decodeAlbumArtPreview(albumArt) }
                 }
-                if (bitmap != null) {
+                val currentBitmap = bitmap
+                if (currentBitmap != null) {
                     // Note: coverTag is kept for potential future SharedElement transitions
                     Image(
-                        bitmap = bitmap.asImageBitmap(),
+                        bitmap = currentBitmap.asImageBitmap(),
                         contentDescription = stringResource(R.string.cd_album_art),
                         modifier = Modifier.fillMaxSize()
                     )

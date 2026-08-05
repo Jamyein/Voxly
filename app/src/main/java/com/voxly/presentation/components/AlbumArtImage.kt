@@ -110,11 +110,16 @@ fun AlbumArtImage(
     var model by remember(albumId, filePath, preResolvedUri) { mutableStateOf<Uri?>(preResolvedUri) }
     var isLoading by remember(albumId, filePath, preResolvedUri) { mutableStateOf(preResolvedUri == null) }
     var loadFailed by remember(albumId, filePath, preResolvedUri) { mutableStateOf(false) }
+    // True once Coil has drawn the bitmap. Gates the placeholder layer so it
+    // disappears only after the image actually rendered (memory-cache hits set
+    // it in the same frame — no placeholder flash at all).
+    var imageLoaded by remember(albumId, filePath, preResolvedUri) { mutableStateOf(false) }
 
     LaunchedEffect(albumId, filePath, coverUriProvider, preResolvedUri) {
         if (preResolvedUri == null) {
             isLoading = true
             loadFailed = false
+            imageLoaded = false
             model = coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
             isLoading = false
         }
@@ -124,6 +129,22 @@ fun AlbumArtImage(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
+        // Placeholder layer — stays composed UNDER the AsyncImage until the
+        // bitmap has drawn. Previously the branches were exclusive, so the
+        // moment the URI resolved the shimmer vanished into Coil's empty
+        // painter (AsyncImage has no placeholder): a blank box flashed before
+        // the crossfade. Layering removes that gap by construction.
+        when {
+            loadFailed -> placeholder()
+            !imageLoaded -> {
+                if (shimmerWhileLoading) {
+                    ShimmerAlbumArtPlaceholder(isAnimating = isLoading && !loadFailed)
+                } else {
+                    placeholder()
+                }
+            }
+        }
+
         if (model != null && !loadFailed) {
             val px = with(density) { size.roundToPx() }
             val imageRequestBuilder = ImageRequest.Builder(LocalContext.current)
@@ -148,12 +169,9 @@ fun AlbumArtImage(
                     contentDescription = contentDescription,
                     modifier = asyncModifier.focusable(false),
                     contentScale = contentScale,
-                    onError = { loadFailed = true }
+                    onError = { loadFailed = true },
+                    onSuccess = { imageLoaded = true }
                 )
-        } else if (isLoading && shimmerWhileLoading) {
-            ShimmerAlbumArtPlaceholder(isAnimating = isLoading && !loadFailed)
-        } else {
-            placeholder()
         }
     }
 }

@@ -2,7 +2,6 @@ package com.voxly.presentation.screens.metadata
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Matrix
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -32,7 +31,6 @@ import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataField
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 
 /**
  * Dialog for confirming discard of unsaved changes.
@@ -224,11 +222,11 @@ fun AlbumArtPreviewDialog(
 
     val previewBitmap by produceState<Bitmap?>(
         initialValue = null,
-        key1 = albumArt?.contentHashCode(),
+        key1 = albumArt,
         key2 = filePath
     ) {
         value = when {
-            albumArt != null -> decodeAlbumArtPreview(albumArt, 2048)
+            albumArt != null -> withContext(Dispatchers.Default) { decodeAlbumArtPreview(albumArt, 2048) }
             !filePath.isNullOrBlank() -> withContext(Dispatchers.IO) {
                 runCatching { loadAlbumArtOriginalBitmap(context, filePath, 2048) }.getOrNull()
             }
@@ -412,29 +410,5 @@ fun decodeAlbumArtPreview(
 fun readBytesFromUri(context: Context, uri: Uri): ByteArray? {
     return runCatching {
         context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-    }.getOrNull()
-}
-
-/**
- * Utility function to convert bitmap to JPEG bytes.
- */
-fun bitmapToJpegBytes(bitmap: Bitmap, quality: Int = 92): ByteArray? {
-    return runCatching {
-        val output = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), output)
-        output.toByteArray()
-    }.getOrNull()
-}
-
-/**
- * Utility function to rotate JPEG bytes.
- */
-fun rotateJpegBytes(bytes: ByteArray, degrees: Float): ByteArray? {
-    return runCatching {
-        val src = decodeBitmapFromBytes(bytes)
-            ?: throw IllegalArgumentException("Invalid image bytes")
-        val matrix = Matrix().apply { postRotate(degrees) }
-        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
-        bitmapToJpegBytes(rotated) ?: throw IllegalStateException("Failed to encode rotated image")
     }.getOrNull()
 }

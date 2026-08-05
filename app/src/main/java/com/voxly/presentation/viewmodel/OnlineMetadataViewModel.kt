@@ -20,7 +20,6 @@ import com.voxly.presentation.viewmodel.SearchSeedHolder
 import com.voxly.presentation.ui.getCoverArtBytes
 import com.voxly.presentation.ui.loadImageBytesFromUrl
 import com.voxly.core.util.Constants
-import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -208,9 +207,6 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                                 state.copy(startedSources = state.startedSources + result.source)
                             }
 
-                            // Prefetch cover art bytes in background (fire-and-forget)
-                            result.release.coverArtUrl?.let { prefetchCoverArtBytes(it) }
-
                             val normalized = result.release.copy(
                                 albumTitle = result.release.albumTitle ?: result.release.title,
                                 source = if (result.release.source == OnlineSource.UNKNOWN) result.source else result.release.source
@@ -233,9 +229,6 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                             _searchState.update { state ->
                                 state.copy(startedSources = state.startedSources + result.source)
                             }
-
-                            // Prefetch cover art bytes in background (fire-and-forget)
-                            result.recording.coverArtUrl?.let { prefetchCoverArtBytes(it) }
 
                             val release = result.recording.toOnlineRelease() ?: return@collect
                             _searchState.update { state ->

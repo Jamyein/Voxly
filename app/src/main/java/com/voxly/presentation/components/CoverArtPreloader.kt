@@ -19,31 +19,38 @@ private const val PRELOAD_AHEAD_DEFAULT = 5
 private const val PRELOAD_SIZE_PX = 300
 private const val PRELOAD_BEHIND_DEFAULT = 2
 
+/**
+ * A cover source as resolved by the renderer: (filePath, mediaStoreAlbumId).
+ * Must match the (albumId, filePath) pair passed to [AlbumArtImage] so the
+ * resolved URI — and thus the Coil memory-cache key — hits.
+ */
+typealias CoverSource = Pair<String?, Long?>
+
 @Composable
 fun LazyListCoverPreloader(
     listState: LazyListState,
-    filePaths: List<String>
+    covers: List<CoverSource>
 ) {
     val firstVisibleIndex by remember { derivedStateOf { listState.firstVisibleItemIndex } }
     val visibleItemCount by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.size } }
     CoverPreloader(
         firstVisibleIndex = firstVisibleIndex,
         visibleItemCount = visibleItemCount,
-        filePaths = filePaths
+        covers = covers
     )
 }
 
 @Composable
 fun LazyGridCoverPreloader(
     gridState: LazyGridState,
-    filePaths: List<String>
+    covers: List<CoverSource>
 ) {
     val firstVisibleIndex by remember { derivedStateOf { gridState.firstVisibleItemIndex } }
     val visibleItemCount by remember { derivedStateOf { gridState.layoutInfo.visibleItemsInfo.size } }
     CoverPreloader(
         firstVisibleIndex = firstVisibleIndex,
         visibleItemCount = visibleItemCount,
-        filePaths = filePaths
+        covers = covers
     )
 }
 
@@ -51,17 +58,17 @@ fun LazyGridCoverPreloader(
 private fun CoverPreloader(
     firstVisibleIndex: Int,
     visibleItemCount: Int,
-    filePaths: List<String>
+    covers: List<CoverSource>
 ) {
-    if (filePaths.isEmpty()) return
+    if (covers.isEmpty()) return
 
     val imageLoader = LocalContext.current.imageLoader
     val platformContext = LocalContext.current
     val coverUriProvider = remember(platformContext) { CoverUriProvider(platformContext) }
 
-    val preloadRange by remember(firstVisibleIndex, visibleItemCount, filePaths.size) {
+    val preloadRange by remember(firstVisibleIndex, visibleItemCount, covers.size) {
         derivedStateOf {
-            val listSize = filePaths.size
+            val listSize = covers.size
             val ahead = when {
                 listSize <= 10 -> listSize.coerceAtMost(5)
                 listSize <= 50 -> (listSize * 0.3).toInt().coerceAtLeast(PRELOAD_AHEAD_DEFAULT)
@@ -70,7 +77,7 @@ private fun CoverPreloader(
             val behind = if (listSize <= 10) 0 else PRELOAD_BEHIND_DEFAULT
             val start = (firstVisibleIndex - behind).coerceAtLeast(0)
             val end = (firstVisibleIndex + visibleItemCount + ahead)
-                .coerceAtMost(filePaths.lastIndex.coerceAtLeast(0))
+                .coerceAtMost(covers.lastIndex.coerceAtLeast(0))
             start to end
         }
     }
@@ -78,18 +85,20 @@ private fun CoverPreloader(
     LaunchedEffect(preloadRange) {
         delay(200)
         val (start, end) = preloadRange
-        if (start <= end && end < filePaths.size) {
-            filePaths.subList(start, end + 1).forEach { path ->
-                val coverUri = coverUriProvider.getCoverUri(null, path)
-                if (coverUri != null) {
-                    imageLoader.enqueue(
-                        ImageRequest.Builder(platformContext)
-                            .data(coverUri)
-                            .size(Size(PRELOAD_SIZE_PX, PRELOAD_SIZE_PX))
-                            .precision(Precision.INEXACT)
-                            .memoryCacheKey(coverUri.toString())
-                            .build()
-                    )
+        if (start <= end && end < covers.size) {
+            covers.subList(start, end + 1).forEach { (path, albumId) ->
+                if (path != null) {
+                    val coverUri = coverUriProvider.getCoverUri(albumId, path)
+                    if (coverUri != null) {
+                        imageLoader.enqueue(
+                            ImageRequest.Builder(platformContext)
+                                .data(coverUri)
+                                .size(Size(PRELOAD_SIZE_PX, PRELOAD_SIZE_PX))
+                                .precision(Precision.INEXACT)
+                                .memoryCacheKey(coverUri.toString())
+                                .build()
+                        )
+                    }
                 }
             }
         }

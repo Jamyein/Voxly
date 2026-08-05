@@ -844,7 +844,7 @@ fun AudioFileStandardRow(
         .combinedClickable(onClick = onClick, onLongClick = onLongClick)
 
     // 无封面占位用角色渐变，title hash 保证同一首歌颜色稳定（同紧凑行）
-    val title = audioFile.metadata.getDisplayTitle(audioFile.name)
+    val title = remember(audioFile) { audioFile.metadata.getDisplayTitle(audioFile.name) }
     val roleAccent = rememberRoleAccent(title)
     val coverSize = 72.dp
 
@@ -857,12 +857,16 @@ fun AudioFileStandardRow(
         Text(title, style = emphasizedTitleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
+        val artistAlbum = remember(audioFile) { audioFile.getDisplayArtistAlbum() }
+        val fileInfo = remember(audioFile) {
+            "${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}"
+        }
         Column {
             Text(
-                audioFile.getDisplayArtistAlbum(),
+                artistAlbum,
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
-            Text("${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            Text(fileInfo, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
         }
     },
     leadingContent = {
@@ -1072,7 +1076,7 @@ fun AudioFileStandardRowCompact(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val title = audioFile.metadata.getDisplayTitle(audioFile.name)
+    val title = remember(audioFile) { audioFile.metadata.getDisplayTitle(audioFile.name) }
     // 无封面占位用角色渐变，title hash 保证同一首歌颜色稳定
     val roleAccent = rememberRoleAccent(title)
     // 封面主导：72dp 封面作为视觉主角，颜色来自封面/占位 + pill
@@ -1088,13 +1092,16 @@ fun AudioFileStandardRowCompact(
         Text(title, style = emphasizedTitleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
-        val displayText = buildString {
-            audioFile.metadata.artist?.let { append(it) }
-            audioFile.metadata.album?.let {
-                if (isNotEmpty()) append(" - ")
-                append(it)
+        val displayText = remember(audioFile) {
+            buildString {
+                audioFile.metadata.artist?.let { append(it) }
+                audioFile.metadata.album?.let {
+                    if (isNotEmpty()) append(" - ")
+                    append(it)
+                }
             }
         }
+        val duration = remember(audioFile) { audioFile.getFormattedDuration() }
         Column {
             if (displayText.isNotEmpty()) {
                 Text(
@@ -1112,7 +1119,7 @@ fun AudioFileStandardRowCompact(
                 contentColor = colorScheme.onTertiaryContainer
             ) {
                 Text(
-                    text = audioFile.getFormattedDuration(),
+                    text = duration,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                 )
