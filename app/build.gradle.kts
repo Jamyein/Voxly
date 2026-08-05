@@ -57,8 +57,8 @@ android {
         minSdk = 30
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 54
-        versionName = "1.7.6"
+        versionCode = 56
+        versionName = "1.7.8"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -96,6 +96,7 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix = ".debug"
             isMinifyEnabled = false
             isShrinkResources = false
             if (debugUseReleaseSigning) {
@@ -303,10 +304,6 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("androidx.hilt:hilt-work:1.4.0")
     ksp("androidx.hilt:hilt-compiler:1.4.0")
-
-    // Paging 3 for efficient large library handling
-    implementation("androidx.paging:paging-runtime-ktx:3.5.0")
-    implementation("androidx.paging:paging-compose:3.5.0")
 
     // Timber for logging
     implementation("com.jakewharton.timber:timber:5.0.1")
