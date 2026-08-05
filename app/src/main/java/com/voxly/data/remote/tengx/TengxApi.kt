@@ -1,137 +1,46 @@
 package com.voxly.data.remote.tengx
 
 import com.voxly.data.remote.tengx.model.TengxAlbumDetail
-import com.voxly.data.remote.tengx.model.TengxLyricsResponse
 import com.voxly.data.remote.tengx.model.TengxSongDetail
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
-import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.Query
-import retrofit2.http.Url
 
 /**
- * Retrofit API interface for TengX Music.
- * Provides endpoints for searching, retrieving song details, lyrics, and album information.
+ * Retrofit API interface for QQ Music.
  *
- * Search API based on any-listen-extension-online-metadata:
- * https://github.com/any-listen/any-listen-extension-online-metadata
- * Reference: src/qq_music/index.ts
+ * All search and lyrics requests go through the unified musicu.fcg endpoint
+ * (POST with JSON body {comm, req_0}), matching the current QQ Music mobile
+ * client protocol as documented by the Lyrico plugin reference.
  *
- * Base URLs:
- * - API: https://u.y.qq.com/
- * - Lyrics API: https://c.y.qq.com/
+ * Song / album detail use GET musicu.fcg — same base, different convention.
  */
 interface TengxApi {
 
     companion object {
-        /** Unified API base URL (any-listen compatible) */
+        /** Unified API base URL */
         const val BASE_URL = "https://u.y.qq.com/"
-        /** Lyrics API base URL */
-        const val LYRIC_BASE_URL = "https://c.y.qq.com/"
     }
 
     /**
-     * Search API using POST request with zzcSign signature.
-     * Endpoint: https://u.y.qq.com/cgi-bin/musics.fcg?sign={sign}
-     *
-     * Uses QQ Music mobile API with JSON body and signature.
-     *
-     * @param sign zzcSign signature for the request body
-     * @param body Search request body (TengxSearchRequest serialized to JSON)
-     * @return Search response as string
+     * Unified musicu.fcg POST — used for search
+     * (module music.search.SearchCgiService, method DoSearchForQQMusicLite)
+     * and lyrics (module music.musichallSong.PlayLyricInfo, method GetPlayLyricInfo).
      */
-    @POST("cgi-bin/musics.fcg")
+    @POST("cgi-bin/musicu.fcg")
     @Headers(
-        "User-Agent: QQMusic 14090508(android 12)"
+        "User-Agent: Mozilla/5.0",
+        "Content-Type: application/json; charset=utf-8"
     )
-    suspend fun search(
-        @Query("sign") sign: String,
-        @Body body: RequestBody
-    ): Response<ResponseBody>
-
-    /**
-     * Fallback search API using GET request (legacy web API).
-     * Used when POST API returns errors.
-     */
-    @GET
-    @Headers(
-        "User-Agent: QQMusic 14090508(android 12)"
-    )
-    suspend fun searchLegacy(
-        @Url url: String = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp",
-        @Query("ct") ct: Int = 24,
-        @Query("qqmusic_ver") qqmusic_ver: Int = 1298,
-        @Query("new_json") new_json: Int = 1,
-        @Query("remoteplace") remoteplace: String = "txt.yqq.song",
-        @Query("searchid") searchid: String = "",
-        @Query("t") t: Int = 0,
-        @Query("aggr") aggr: Int = 1,
-        @Query("cr") cr: String = "1",
-        @Query("catZhida") catZhida: Int = 1,
-        @Query("lossless") lossless: Int = 0,
-        @Query("flag_qc") flag_qc: Int = 0,
-        @Query("p") pageNum: Int = 1,
-        @Query("n") pageSize: Int = 20,
-        @Query("w") keywords: String,
-        @Query("g_tk") g_tk: Int = 5381,
-        @Query("loginUin") loginUin: String = "0",
-        @Query("hostUin") hostUin: Int = 0,
-        @Query("format") format: String = "json",
-        @Query("inCharset") inCharset: String = "utf8",
-        @Query("outCharset") outCharset: String = "utf-8",
-        @Query("notice") notice: Int = 0,
-        @Query("platform") platform: String = "yqq",
-        @Query("needNewCode") needNewCode: Int = 0
-    ): Response<ResponseBody>
-
-    /**
-     * Gets lyrics for a song using GET request with query parameters.
-     * Uses different base URL for lyrics API.
-     *
-     * @param songmid Song middle ID (songmid from search results)
-     * @param g_tk GTK parameter for authentication
-     * @param loginUin Login user ID (0 for guest)
-     * @param hostUin Host UIN
-     * @param format Response format (json)
-     * @param inCharset Input charset (utf8)
-     * @param outCharset Output charset (utf-8)
-     * @param platform Platform (yqq)
-     * @param referer Referer header for request
-     * @return Lyrics response with Base64 encoded lyrics content
-     */
-    @GET
-    @Headers(
-        "User-Agent: QQMusic 14090508(android 12)",
-        "Referer: https://y.qq.com/portal/player.html",
-        "Origin: https://y.qq.com",
-        "X-Requested-With: XMLHttpRequest",
-        "Accept: */*",
-        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
-    )
-    suspend fun getLyrics(
-        @Url url: String = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg",
-        @Query("songmid") songmid: String,
-        @Query("g_tk") g_tk: Int = 5381,
-        @Query("loginUin") loginUin: Int = 0,
-        @Query("hostUin") hostUin: Int = 0,
-        @Query("format") format: String = "json",
-        @Query("inCharset") inCharset: String = "utf8",
-        @Query("outCharset") outCharset: String = "utf-8",
-        @Query("platform") platform: String = "yqq",
-        @Header("Referer") referer: String = "https://y.qq.com/portal/player.html"
-    ): Response<TengxLyricsResponse>
+    suspend fun postMusicu(@Body body: RequestBody): Response<ResponseBody>
 
     /**
      * Gets detailed information about songs.
-     *
-     * @param songIds Comma-separated song IDs
-     * @param format Response format (default: json)
-     * @return Song detail response
      */
     @GET("cgi-bin/musicu.fcg")
     @Headers(
@@ -149,10 +58,6 @@ interface TengxApi {
 
     /**
      * Gets album details and songs.
-     *
-     * @param albumId Album ID
-     * @param format Response format (default: json)
-     * @return Album detail response
      */
     @GET("cgi-bin/musicu.fcg")
     @Headers(

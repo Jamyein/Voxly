@@ -420,7 +420,7 @@ class LyricsRepositoryImpl @Inject constructor(
                     hasPlainLyrics = true,
                     isInstrumental = false,
                     source = "QQ Music",
-                    sourceKey = song.mid.takeIf { it.isNotBlank() } ?: song.id.toString(),
+                    sourceKey = song.id.toString(),
                     preview = null
                 )
             }
@@ -494,15 +494,13 @@ class LyricsRepositoryImpl @Inject constructor(
             try {
                 val lyricsResult = when (result.source) {
                     "NetEase" -> getNetEaseLyrics(result.id)
-                    "QQ Music" -> {
-                        val songMid = result.sourceKey?.trim().takeUnless { it.isNullOrEmpty() }
-                            ?: resolveQQSongMid(result.id)
-                        if (songMid == null) {
-                            Result.failure(LyricsException("QQ Music songMid is missing"))
-                        } else {
-                            getQQMusicLyrics(songMid)
-                        }
-                    }
+                    "QQ Music" -> getQQMusicLyrics(
+                        songId = result.id,
+                        songName = result.trackName,
+                        albumName = result.albumName ?: "",
+                        artistName = result.artistName,
+                        duration = ((result.duration?.div(1000.0) ?: 0.0) * 1000).toLong()
+                    )
                     else -> Result.failure(LyricsException("Unsupported lyrics source: ${result.source}"))
                 }
 
@@ -565,13 +563,19 @@ class LyricsRepositoryImpl @Inject constructor(
         }
 
     /**
-     * Gets lyrics from QQ Music by song mid.
+     * Gets lyrics from QQ Music by numeric song ID.
      * Automatically merges original and translated lyrics if available.
      */
-    suspend fun getQQMusicLyrics(songMid: String): Result<Lyrics> =
+    suspend fun getQQMusicLyrics(
+        songId: Long,
+        songName: String = "",
+        albumName: String = "",
+        artistName: String = "",
+        duration: Long = 0
+    ): Result<Lyrics> =
         withContext(Dispatchers.IO) {
             try {
-                val response = tengxRepository.getLyrics(songMid)
+                val response = tengxRepository.getLyrics(songId, songName, albumName, artistName, duration)
 
                 if (response.isSuccess) {
                     val lyricsData = response.getOrNull()
@@ -650,15 +654,6 @@ class LyricsRepositoryImpl @Inject constructor(
             ?.takeIf { kotlin.math.abs(it - target) <= toleranceMs }
     }
 
-    private suspend fun resolveQQSongMid(songId: Long): String? {
-        return tengxRepository.getSongDetail(listOf(songId))
-            .getOrNull()
-            ?.data
-            ?.track
-            ?.firstOrNull()
-            ?.mid
-            ?.takeIf { it.isNotBlank() }
-    }
 
     override suspend fun getCachedLyrics(
         trackName: String,

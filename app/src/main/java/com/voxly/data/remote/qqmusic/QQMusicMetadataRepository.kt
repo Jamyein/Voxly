@@ -262,7 +262,13 @@ class QQMusicMetadataRepository @Inject constructor(
                                         }
                                         val lyricsDeferred = async {
                                             if (song.mid.isNotBlank()) {
-                                                tengxRepository.getLyrics(song.mid)
+                                                tengxRepository.getLyrics(
+                                                    songId = song.id,
+                                                    songName = song.name,
+                                                    albumName = song.album?.name ?: "",
+                                                    artistName = song.singer.joinToString(", ") { it.name },
+                                                    duration = song.interval.toLong()
+                                                )
                                             } else {
                                                 Result.failure(Exception("Invalid song mid"))
                                             }

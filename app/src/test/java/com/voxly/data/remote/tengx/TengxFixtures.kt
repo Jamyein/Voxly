@@ -4,147 +4,142 @@ import com.voxly.data.remote.tengx.model.*
 
 /**
  * Test fixtures for Tengx (QQ Music) API responses.
- * Provides sample JSON payloads for testing without live API calls.
+ *
+ * Search responses use the musicu.fcg format (req_0 wrapper).
+ * Lyrics responses use the GetPlayLyricInfo format (req_0.data.lyric/trans/roma).
  */
 object TengxFixtures {
 
-    // ==================== Search Response Fixtures ====================
+    // ==================== Search Response Fixtures (musicu.fcg) ====================
 
-    /** Successful search response with songs */
+    /** Successful search response with songs (musicu.fcg format). */
     const val SEARCH_SUCCESS_JSON = """
     {
         "code": 0,
-        "message": "",
-        "data": {
-            "song": {
-                "totalnum": 2,
-                "list": [
-                    {
-                        "id": 123456789,
-                        "mid": "001XXp5G2v8f7c",
-                        "name": "Test Song",
-                        "title": "Test Song",
-                        "subtitle": "",
-                        "interval": 240000,
-                        "version": 1,
-                        "singer": [
-                            {
-                                "id": 1001,
-                                "name": "Test Artist",
-                                "title": "Test Artist",
-                                "type": 1,
-                                "gender": 1,
+        "req_0": {
+            "data": {
+                "body": {
+                    "item_song": [
+                        {
+                            "id": 123456789,
+                            "mid": "001XXp5G2v8f7c",
+                            "name": "Test Song",
+                            "title": "Test Song",
+                            "subtitle": "",
+                            "interval": 240000,
+                            "time_public": "2024-01-01",
+                            "singer": [
+                                {
+                                    "id": 1001,
+                                    "name": "Test Artist",
+                                    "title": "Test Artist",
+                                    "type": 1,
+                                    "gender": 1,
+                                    "pic": ""
+                                }
+                            ],
+                            "album": {
+                                "id": 2001,
+                                "mid": "001T8N2x3y4z5A",
+                                "name": "Test Album",
+                                "title": "Test Album",
+                                "pic": "https://y.gtimg.cn/music/photo_new/T002R500x500M000001T8N2x3y4z5A.jpg"
+                            }
+                        },
+                        {
+                            "id": 987654321,
+                            "mid": "002YYp5H3g9d8f",
+                            "name": "Another Song",
+                            "title": "Another Song",
+                            "subtitle": "feat. Someone",
+                            "interval": 195000,
+                            "time_public": "2023-06-15",
+                            "singer": [
+                                {
+                                    "id": 1002,
+                                    "name": "Another Artist",
+                                    "title": "Another Artist",
+                                    "type": 1,
+                                    "gender": 2,
+                                    "pic": ""
+                                }
+                            ],
+                            "album": {
+                                "id": 2002,
+                                "mid": "002U9O4i5a6b7B",
+                                "name": "Another Album",
+                                "title": "Another Album",
                                 "pic": ""
                             }
-                        ],
-                        "album": {
-                            "id": 2001,
-                            "mid": "001T8N2x3y4z5A",
-                            "name": "Test Album",
-                            "title": "Test Album",
-                            "singer": null,
-                            "publicTime": "2024-01-01",
-                            "pic": "https://y.gtimg.cn/music/photo_new/T002R500x500M000001T8N2x3y4z5A.jpg"
                         }
-                    },
-                    {
-                        "id": 987654321,
-                        "mid": "002YYp5H3g9d8f",
-                        "name": "Another Song",
-                        "title": "Another Song",
-                        "subtitle": "feat. Someone",
-                        "interval": 195000,
-                        "version": 2,
-                        "singer": [
-                            {
-                                "id": 1002,
-                                "name": "Another Artist",
-                                "title": "Another Artist",
-                                "type": 1,
-                                "gender": 2,
-                                "pic": ""
-                            }
-                        ],
-                        "album": {
-                            "id": 2002,
-                            "mid": "002U9O4i5a6b7B",
-                            "name": "Another Album",
-                            "title": "Another Album",
-                            "singer": null,
-                            "publicTime": "2023-06-15",
-                            "pic": ""
-                        }
-                    }
-                ]
+                    ],
+                    "sum": 2
+                },
+                "meta": {
+                    "sum": 2
+                }
             }
         }
     }
     """
 
-    /** Search response with no results */
+    /** Search response with no results. */
     const val SEARCH_EMPTY_JSON = """
     {
         "code": 0,
-        "message": "",
-        "data": {
-            "song": {
-                "totalnum": 0,
-                "list": []
+        "req_0": {
+            "data": {
+                "body": {},
+                "meta": { "sum": 0 }
             }
         }
     }
     """
 
-    /** Search response with API error */
-    const val SEARCH_ERROR_JSON = """
-    {
-        "code": -1,
-        "message": "Invalid parameter",
-        "data": null
-    }
-    """
+    // ==================== Lyrics Response Fixtures (GetPlayLyricInfo) ====================
 
-    // ==================== Lyrics Response Fixtures ====================
-
-    /** Successful lyrics response with Base64 encoded content */
+    /**
+     * Lyrics fixture with base64-encoded QRC text.
+     *
+     * The plain QRC text is:
+     *   [0,3000]hello world[4000,2000]bye
+     * Base64-encoded for the trans field.
+     * The qrc field uses hex that won't decrypt (fallthrough to base64).
+     *
+     * After decodeLyricPayload → qrcToLrc, lyrics becomes:
+     *   [00:00.00]hello world
+     *   [00:04.00]bye
+     */
     const val LYRICS_SUCCESS_JSON = """
     {
         "code": 0,
-        "lyric": {
-            "lyric": "w6zCzsYAQ+egkeaIkOS7suWkt+eggeeggeS7suWkt+eggeeggeS7suWkqOS4quaMh+W6kyE=",
-            "version": 3
-        },
-        "trans": {
-            "lyric": "5LiL5Y2g5a2m55CG5ZOl5bey5biB5b+D6K+35Y2g5a2m55CG5ZOl5bey5biB5b+D6K+3",
-            "version": 1
-        },
-        "message": ""
+        "req_0": {
+            "data": {
+                "lyric": "WzAsMzAwMF1oZWxsbyB3b3JsZApbNDAwMCwyMDAwXWJ5ZQ==",
+                "trans": "WzAsMzAwMF3kvaDlpb3kuJbnlYwKWzQwMDAsMjAwMF3mi5w=",
+                "roma": ""
+            }
+        }
     }
     """
 
-    /** Lyrics response with no lyrics available */
+    /** Lyrics response with no lyrics available. */
     const val LYRICS_EMPTY_JSON = """
     {
         "code": 0,
-        "lyric": null,
-        "trans": null,
-        "message": ""
-    }
-    """
-
-    /** Lyrics response with API error */
-    const val LYRICS_ERROR_JSON = """
-    {
-        "code": -1,
-        "lyric": null,
-        "trans": null,
-        "message": "Song not found"
+        "req_0": {
+            "data": {
+                "lyric": null,
+                "trans": null,
+                "roma": null
+            }
+        }
     }
     """
 
     // ==================== Song Detail Response Fixtures ====================
 
-    /** Successful song detail response */
+    /** Successful song detail response. */
     const val SONG_DETAIL_SUCCESS_JSON = """
     {
         "code": 0,
@@ -180,7 +175,7 @@ object TengxFixtures {
 
     // ==================== Album Detail Response Fixtures ====================
 
-    /** Successful album detail response */
+    /** Successful album detail response. */
     const val ALBUM_DETAIL_SUCCESS_JSON = """
     {
         "code": 0,
@@ -219,7 +214,7 @@ object TengxFixtures {
 
     // ==================== Domain Model Fixtures ====================
 
-    /** Sample TengxSong for testing */
+    /** Sample TengxSong for testing. */
     val sampleSong = TengxSong(
         id = 123456789L,
         mid = "001XXp5G2v8f7c",
@@ -246,10 +241,10 @@ object TengxFixtures {
             pic = "https://y.gtimg.cn/music/photo_new/T002R500x500M000001T8N2x3y4z5A.jpg"
         ),
         interval = 240000,
-        version = 1
+        version = 0
     )
 
-    /** Sample TengxAlbum for testing */
+    /** Sample TengxAlbum for testing. */
     val sampleAlbum = TengxAlbum(
         id = 2001L,
         mid = "001T8N2x3y4z5A",
@@ -267,7 +262,7 @@ object TengxFixtures {
         pic = "https://y.gtimg.cn/music/photo_new/T002R500x500M000001T8N2x3y4z5A.jpg"
     )
 
-    /** Sample TengxSearchResponse for testing */
+    /** Sample TengxSearchResponse for testing. */
     val sampleSearchResponse = TengxSearchResponse(
         code = 0,
         data = TengxSearchData(
@@ -276,37 +271,12 @@ object TengxFixtures {
                 totalnum = 1
             )
         ),
-        message = ""
+        message = null
     )
 
-    /** Sample TengxLyricsResponse for testing */
-    val sampleLyricsResponse = TengxLyricsResponse(
-        code = 0,
-        lyric = TengxLyricContainer(
-            lyric = "w6zCzsYAQ+egkeaIkOS7suWkt+eggeeggeS7suWkt+eggeeggeS7suWkqOS4quaMh+W6kyE=",
-            version = 3
-        ),
-        trans = TengxLyricContainer(
-            lyric = "5LiL5Y2g5a2m55CG5ZOl5bey5biB5b+D6K+35Y2g5a2m55CG5ZOl5bey5biB5b+D6K+3",
-            version = 1
-        ),
-        message = ""
+    /** Sample DecodedLyricsResult for testing. */
+    val sampleDecodedLyricsResult = DecodedLyricsResult(
+        lyrics = "[00:00.00]hello world\n[00:04.00]bye",
+        translatedLyrics = "[00:00.00]你好世界\n[00:04.00]拜"
     )
-
-    /** Sample DecodedLyricsResult for testing */
-    fun sampleDecodedLyricsResult(): DecodedLyricsResult {
-        return DecodedLyricsResult(
-            response = sampleLyricsResponse,
-            lyrics = "测试歌词内容",
-            translatedLyrics = "测试翻译歌词内容"
-        )
-    }
-
-    // ==================== Error Fixtures ====================
-
-    /** Network error scenario */
-    class NetworkError : Exception("Network error")
-
-    /** API error scenario */
-    class ApiError(val code: Int, message: String) : Exception("API error: $code - $message")
 }

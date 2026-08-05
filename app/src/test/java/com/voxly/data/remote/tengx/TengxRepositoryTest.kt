@@ -12,6 +12,8 @@ import retrofit2.Response
 
 /**
  * Unit tests for TengxRepository (QQ Music API).
+ *
+ * Tests the musicu.fcg POST endpoint paths used by the Lyrico-aligned implementation.
  */
 class TengxRepositoryTest {
 
@@ -26,34 +28,39 @@ class TengxRepositoryTest {
         repository = TengxRepositoryImpl(api)
     }
 
+    // -- search --
+
     @Test
     fun searchSongs_returnsSuccess() = runBlocking {
         val mockResponseBody: ResponseBody = mockk()
         every { mockResponseBody.string() } returns TengxFixtures.SEARCH_SUCCESS_JSON
-        
+
         val mockResponse: Response<ResponseBody> = mockk()
         every { mockResponse.isSuccessful } returns true
         every { mockResponse.body() } returns mockResponseBody
         every { mockResponse.code() } returns 200
-        
-        coEvery { api.search(sign = any(), body = any()) } returns mockResponse
+
+        coEvery { api.postMusicu(body = any()) } returns mockResponse
 
         val result = repository.searchSongs("test song")
 
         assertTrue(result.isSuccess)
+        val songs = result.getOrNull()?.data?.song?.list.orEmpty()
+        assertTrue(songs.isNotEmpty())
+        assertEquals("Test Song", songs.first().name)
     }
 
     @Test
     fun searchSongs_returnsEmpty() = runBlocking {
         val mockResponseBody: ResponseBody = mockk()
         every { mockResponseBody.string() } returns TengxFixtures.SEARCH_EMPTY_JSON
-        
+
         val mockResponse: Response<ResponseBody> = mockk()
         every { mockResponse.isSuccessful } returns true
         every { mockResponse.body() } returns mockResponseBody
         every { mockResponse.code() } returns 200
-        
-        coEvery { api.search(sign = any(), body = any()) } returns mockResponse
+
+        coEvery { api.postMusicu(body = any()) } returns mockResponse
 
         val result = repository.searchSongs("nonexistent")
 
@@ -63,32 +70,46 @@ class TengxRepositoryTest {
 
     @Test
     fun searchSongs_returnsFailure_onNetworkError() = runBlocking {
-        coEvery { api.search(sign = any(), body = any()) } throws Exception("Network error")
+        coEvery { api.postMusicu(body = any()) } throws Exception("Network error")
 
         val result = repository.searchSongs("test")
 
         assertTrue(result.isFailure)
     }
 
+    // -- lyrics --
+
     @Test
     fun getLyrics_returnsSuccess() = runBlocking {
-        val mockResponse = Response.success(TengxFixtures.sampleLyricsResponse)
-        coEvery { api.getLyrics(songmid = any()) } returns mockResponse
+        val mockResponseBody: ResponseBody = mockk()
+        every { mockResponseBody.string() } returns TengxFixtures.LYRICS_SUCCESS_JSON
 
-        val result = repository.getLyrics("001XXp5G2v8f7c")
+        val mockResponse: Response<ResponseBody> = mockk()
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.body() } returns mockResponseBody
+        every { mockResponse.code() } returns 200
 
-        assertTrue(result.isSuccess)
+        coEvery { api.postMusicu(body = any()) } returns mockResponse
+
+        val result = repository.getLyrics(songId = 123456789L)
+
+        assertTrue("getLyrics failed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        val lyrics = result.getOrNull()!!
+        assertTrue("lyrics is blank", lyrics.lyrics.isNotBlank())
+        assertTrue("translatedLyrics is blank", lyrics.translatedLyrics.isNotBlank())
     }
 
     @Test
     fun getLyrics_returnsFailure_onApiError() = runBlocking {
-        val errorResponse = Response.error<TengxLyricsResponse>(500, mockk(relaxed = true))
-        coEvery { api.getLyrics(songmid = any()) } returns errorResponse
+        val errorResponse = Response.error<ResponseBody>(500, mockk(relaxed = true))
+        coEvery { api.postMusicu(body = any()) } returns errorResponse
 
-        val result = repository.getLyrics("invalid")
+        val result = repository.getLyrics(songId = 0L)
 
         assertTrue(result.isFailure)
     }
+
+    // -- song detail --
 
     @Test
     fun getSongDetail_returnsSuccess() = runBlocking {
@@ -109,6 +130,8 @@ class TengxRepositoryTest {
 
         assertTrue(result.isFailure)
     }
+
+    // -- album detail --
 
     @Test
     fun getAlbumDetail_returnsSuccess() = runBlocking {
