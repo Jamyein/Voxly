@@ -52,6 +52,14 @@ internal fun ImageRequest.Builder.applySharedMemoryCache(
     placeholderMemoryCacheKey(placeholderKey)
 }
 
+/**
+ * 专辑封面的统一目标解码尺寸（dp）。共享过渡的位图复用依赖"一个 URI 一个解码尺寸"：
+ * Coil 的 MemoryCache.Key 不含尺寸、INEXACT 兼容范围是 [0.5x, 2x]，若各渲染点自行推断尺寸，
+ * 详情页（240dp）会命中列表/预加载的小尺寸条目并上采样发虚。因此网格、详情、首屏预加载、
+ * 滚动预加载全部引用此常量；未来调整只改这一处。
+ */
+internal val AlbumCoverDecodeSize: Dp = 240.dp
+
 @Composable
 fun NetworkCoverImage(
     url: String?,

@@ -11,6 +11,7 @@ import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistListItemState
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.AlbumCoverDecodeSize
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Named
@@ -72,9 +74,10 @@ class CoverPreloadManager @Inject constructor(
     private val imageLoader = context.imageLoader
 
     // Display sizes matched to the renderers so the cached bitmap is never
-    // upscaled: AlbumCard renders AlbumArtImage(size = 200.dp), ArtistListItem
-    // uses 48.dp. roundToPx in AlbumArtImage uses the same density.
-    private val albumPx = (200 * context.resources.displayMetrics.density).toInt()
+    // upscaled: AlbumGridItem and the detail hero both request [AlbumCoverDecodeSize]
+    // (single shared decode size), ArtistListItem uses 48.dp. roundToPx in
+    // AlbumArtImage uses the same density.
+    private val albumPx = (AlbumCoverDecodeSize.value * context.resources.displayMetrics.density).roundToInt()
     private val artistPx = (48 * context.resources.displayMetrics.density).toInt()
 
     private var started = false

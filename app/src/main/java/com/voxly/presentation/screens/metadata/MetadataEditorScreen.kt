@@ -93,6 +93,7 @@ fun MetadataEditorScreen(
     onNavigateToLyricsSelector: (lyricsText: String, title: String, artist: String, album: String, albumArtBytes: ByteArray?) -> Unit,
     coverTag: String? = null,
     sharedElementKey: String? = null,
+    coverUri: String? = null,
     pendingOnlineLyrics: String? = null,
     onConsumePendingOnlineLyrics: () -> Unit = {},
     pendingOnlineCoverArt: ByteArray? = null,
@@ -294,6 +295,7 @@ fun MetadataEditorScreen(
                 audioFile = (uiState as? MetadataEditorUiState.Success)?.audioFile,
                 albumArt = editedMetadata?.albumArt,
                 mediaStoreAlbumId = (uiState as? MetadataEditorUiState.Success)?.audioFile?.mediaStoreAlbumId,
+                coverUri = coverUri,
                 bottomPadding = WindowInsets.navigationBars.exclude(WindowInsets.ime).asPaddingValues().calculateBottomPadding() + 80.dp,
                 modifiedFields = modifiedFields,
                 coverTag = coverTag,
@@ -406,6 +408,7 @@ private fun MetadataEditorScaffoldContent(
     audioFile: com.voxly.domain.model.AudioFile?,
     albumArt: ByteArray?,
     mediaStoreAlbumId: Long?,
+    coverUri: String? = null,
     bottomPadding: androidx.compose.ui.unit.Dp,
     modifiedFields: Set<MetadataField>,
     coverTag: String?,
@@ -474,6 +477,7 @@ private fun MetadataEditorScaffoldContent(
                     editedMetadata = editedMetadata ?: state.editedMetadata,
                     albumArt = albumArt,
                     mediaStoreAlbumId = mediaStoreAlbumId,
+                    coverUri = coverUri,
                     bottomPadding = bottomPadding,
                     modifiedFields = modifiedFields,
                     coverTag = coverTag,
@@ -533,6 +537,7 @@ private fun MetadataEditorSuccessContent(
     editedMetadata: com.voxly.domain.model.AudioMetadata,
     albumArt: ByteArray?,
     mediaStoreAlbumId: Long?,
+    coverUri: String? = null,
     bottomPadding: androidx.compose.ui.unit.Dp,
     modifiedFields: Set<MetadataField>,
     coverTag: String?,
@@ -573,14 +578,20 @@ private fun MetadataEditorSuccessContent(
         derivedStateOf { scrollState.isScrollInProgress || scrollState.value > 0 }
     }
 
-    val mediaStoreFallbackBitmap by produceState<Bitmap?>(
-        initialValue = null,
-        key1 = mediaStoreAlbumId,
-        key2 = albumArt
-    ) {
-        value = if (albumArt == null && mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
-            withContext(Dispatchers.IO) {
-                loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
+    // MediaStore album-art URI fallback（无内嵌封面时显示）。直接传 URI 让 Coil 按显示尺寸
+    // 解码——旧实现传 300px 预解码 Bitmap，全宽封面（~340dp ≈ 900px）上 3x 上采样发虚。
+    // 优先级：albumId 有效 → MediaStore-from-id（与列表行 MediaStore 场景同 URI，命中内存缓存）；
+    // albumId 无效 → NavKey 携带的列表行同款 URI（folder/内嵌场景，命中列表行缓存）→
+    // 共享过渡首帧直接出图，无占位闪烁。albumArt（内嵌原始字节）就绪后 ByteArray 无感覆盖。
+    val coverFallbackUri = remember(coverUri, mediaStoreAlbumId, albumArt) {
+        if (albumArt == null) {
+            if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
+                android.content.ContentUris.withAppendedId(
+                    android.net.Uri.parse("content://media/external/audio/albumart"),
+                    mediaStoreAlbumId
+                )
+            } else {
+                coverUri?.let { android.net.Uri.parse(it) }
             }
         } else {
             null
@@ -591,7 +602,7 @@ private fun MetadataEditorSuccessContent(
         MetadataFormContent(
             metadata = editedMetadata,
             audioFile = state.audioFile,
-            albumArtFallback = mediaStoreFallbackBitmap,
+            albumArtFallbackUri = coverFallbackUri,
             bottomPadding = bottomPadding,
             scrollState = scrollState,
             nestedScrollModifier = Modifier,
@@ -897,7 +908,7 @@ private fun fieldLabel(field: MetadataField, baseLabelResId: Int, modifiedFields
 private fun MetadataFormContent(
     metadata: com.voxly.domain.model.AudioMetadata,
     audioFile: com.voxly.domain.model.AudioFile,
-    albumArtFallback: android.graphics.Bitmap? = null,
+    albumArtFallbackUri: android.net.Uri? = null,
     modifiedFields: Set<MetadataField>,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
@@ -938,7 +949,7 @@ private fun MetadataFormContent(
     ) {
         AlbumArtSection(
             albumArt = metadata.albumArt,
-            fallbackBitmap = albumArtFallback,
+            fallbackUri = albumArtFallbackUri,
             onPickAlbumArt = onPickAlbumArt,
             coverTag = coverTag,
             onZoomAlbumArt = onZoomAlbumArt,

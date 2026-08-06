@@ -472,6 +472,8 @@
     <string name="log_viewer_log_file">Log file</string>
     <string name="log_viewer_copied_line">Line copied</string>
     <string name="log_viewer_cleanup_confirm">Delete all log files? This cannot be undone.</string>
+    <string name="log_viewer_section_logs">Log Files</string>
+    <string name="log_viewer_section_crash">Crash Reports</string>
 
     <!-- Dialogs -->
     <string name="dialog_close">Close</string>

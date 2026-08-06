@@ -3,10 +3,15 @@ package com.voxly.presentation.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.style.ExperimentalFoundationStyleApi
+import androidx.compose.foundation.style.Style
+import androidx.compose.foundation.style.rememberUpdatedStyleState
+import androidx.compose.foundation.style.styleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +56,7 @@ import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,7 +74,9 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.VoxlyStyles
 import com.voxly.presentation.theme.emphasizedTitleMedium
+import com.voxly.presentation.theme.rememberCoverMorphShape
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import kotlinx.coroutines.launch
 
@@ -94,7 +102,6 @@ private val ConnectedCompactButtonMinWidth = 48.dp
 private val ConnectedButtonHorizontalPadding = 12.dp
 private const val SelectedButtonWeight = 1.24f
 private const val UnselectedButtonWeight = 1.0f
-private val VerticalLayoutPadding = 16.dp
 private val VerticalItemSpacing = 12.dp
 private val MenuDividerPadding = 4.dp
 
@@ -183,7 +190,7 @@ private fun TitleSubtitleContent(
 
 data class SegmentedOption<T>(val value: T, val icon: ImageVector? = null, val label: String? = null)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun SegmentedSwitchRow(
     title: String,
@@ -192,21 +199,25 @@ fun SegmentedSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
-) = SegmentedListItem(
-    checked = false,
-    onCheckedChange = onCheckedChange,
-    shapes = ListItemDefaults.segmentedShapes(index, count),
-    colors = ListItemDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
-    ),
-    trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
-    modifier = modifier.fillMaxWidth(),
-    content = { Text(text = title, style = MaterialTheme.typography.bodyLarge) },
-    supportingContent = subtitle?.let {
-        { Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    }
-)
+    modifier: Modifier = Modifier,
+    style: Style = Style
+) {
+    val styleState = rememberUpdatedStyleState(null) { it.isChecked = checked }
+    SegmentedListItem(
+        checked = false,
+        onCheckedChange = onCheckedChange,
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+        modifier = modifier.fillMaxWidth().styleable(styleState, VoxlyStyles.settingsRowStyle, style),
+        content = { Text(text = title, style = MaterialTheme.typography.bodyLarge) },
+        supportingContent = subtitle?.let {
+            { Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -218,7 +229,8 @@ fun <T> SegmentedButtonRow(
     onSelected: (T) -> Unit,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    style: Style = Style
 ) {
     SegmentedButtonImpl(
         title = title,
@@ -230,31 +242,35 @@ fun <T> SegmentedButtonRow(
         count = count,
         modifier = modifier,
         titleStyle = null,
-        iconContentDescription = null
+        iconContentDescription = null,
+        style = style
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun SegmentedInfoRow(
     title: String,
     value: String,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
-) = SegmentedListItem(
-    onClick = {},
-    shapes = ListItemDefaults.segmentedShapes(index, count),
-    colors = ListItemDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
-    ),
-    leadingContent = { Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-    trailingContent = { Text(value) },
-    modifier = modifier.fillMaxWidth(),
-    content = {}
-)
+    modifier: Modifier = Modifier,
+    style: Style = Style
+) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        leadingContent = { Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+        trailingContent = { Text(value) },
+        modifier = modifier.fillMaxWidth().styleable(null, VoxlyStyles.settingsRowStyle, style),
+        content = {}
+    )
+}
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun SegmentedClickableRow(
     title: String,
@@ -263,20 +279,23 @@ fun SegmentedClickableRow(
     onClick: () -> Unit,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
-) = SegmentedListItem(
-    onClick = onClick,
-    shapes = ListItemDefaults.segmentedShapes(index, count),
-    colors = ListItemDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
-    ),
-    trailingContent = trailingContent,
-    modifier = modifier.fillMaxWidth(),
-    content = { Text(text = title, style = MaterialTheme.typography.bodyLarge) },
-    supportingContent = subtitle?.let {
-        { Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    }
-)
+    modifier: Modifier = Modifier,
+    style: Style = Style
+) {
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        trailingContent = trailingContent,
+        modifier = modifier.fillMaxWidth().styleable(null, VoxlyStyles.settingsRowStyle, style),
+        content = { Text(text = title, style = MaterialTheme.typography.bodyLarge) },
+        supportingContent = subtitle?.let {
+            { Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    )
+}
 
 /**
  * Segmented row with segmented button group for selecting one option.
@@ -292,7 +311,8 @@ fun <T> SegmentedButton(
     onSelected: (T) -> Unit,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    style: Style = Style
 ) {
     SegmentedButtonImpl(
         title = title,
@@ -304,11 +324,12 @@ fun <T> SegmentedButton(
         count = count,
         modifier = modifier,
         titleStyle = MaterialTheme.typography.bodyLarge,
-        iconContentDescription = { it.label ?: "" }
+        iconContentDescription = { it.label ?: "" },
+        style = style
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 private fun <T> SegmentedButtonImpl(
     title: String,
@@ -320,7 +341,8 @@ private fun <T> SegmentedButtonImpl(
     count: Int,
     modifier: Modifier,
     titleStyle: androidx.compose.ui.text.TextStyle?,
-    iconContentDescription: ((SegmentedOption<T>) -> String)?
+    iconContentDescription: ((SegmentedOption<T>) -> String)?,
+    style: Style = Style
 ) {
     SegmentedListItem(
         onClick = {},
@@ -391,7 +413,7 @@ private fun <T> SegmentedButtonImpl(
                 }
             }
         },
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().styleable(null, VoxlyStyles.settingsRowStyle, style),
         content = { Text(text = title, style = titleStyle ?: MaterialTheme.typography.bodyLarge) },
         supportingContent = subtitle?.let {
             { Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -405,7 +427,7 @@ private fun <T> SegmentedButtonImpl(
  * Uses ButtonGroup with ToggleButton for M3E Expressive Connected style.
  * Features weight animation for expressive feel.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun <T> ConnectedButtonGroupRow(
     title: String,
@@ -415,13 +437,15 @@ fun <T> ConnectedButtonGroupRow(
     onSelected: (T) -> Unit,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
-) = SegmentedListItem(
-    onClick = {},
-    shapes = ListItemDefaults.segmentedShapes(index, count),
-    colors = ListItemDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
-    ),
+    modifier: Modifier = Modifier,
+    style: Style = Style
+) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
     leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
     trailingContent = {
         val animatedWeights = rememberConnectedButtonWeights(
@@ -477,14 +501,15 @@ fun <T> ConnectedButtonGroupRow(
             }
         }
     },
-    modifier = modifier.fillMaxWidth(),
+    modifier = modifier.fillMaxWidth().styleable(null, VoxlyStyles.settingsRowStyle, style),
     content = {}
-)
+    )
+}
 
 /**
  * Segmented row with compact connected button group - no spacing between buttons.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun <T> ConnectedButtonGroupRowCompact(
     title: String,
@@ -494,13 +519,15 @@ fun <T> ConnectedButtonGroupRowCompact(
     onSelected: (T) -> Unit,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
-) = SegmentedListItem(
-    onClick = {},
-    shapes = ListItemDefaults.segmentedShapes(index, count),
-    colors = ListItemDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
-    ),
+    modifier: Modifier = Modifier,
+    style: Style = Style
+) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
     leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
     trailingContent = {
         val animatedWeights = rememberConnectedButtonWeights(
@@ -558,15 +585,16 @@ fun <T> ConnectedButtonGroupRowCompact(
             }
         }
     },
-    modifier = modifier.fillMaxWidth(),
+    modifier = modifier.fillMaxWidth().styleable(null, VoxlyStyles.settingsRowStyle, style),
     content = {}
-)
+    )
+}
 
 /**
  * Segmented row with vertical layout - title on top, buttons below.
  * For settings like ReplayGain with longer option labels.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun <T> ConnectedButtonGroupVerticalRow(
     title: String,
@@ -576,14 +604,17 @@ fun <T> ConnectedButtonGroupVerticalRow(
     onSelected: (T) -> Unit,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
-) = Surface(
-    modifier = modifier.fillMaxWidth(),
-    shape = MaterialTheme.shapes.medium,
-    color = MaterialTheme.colorScheme.surfaceContainer,
-    onClick = {} // Required for Surface to have proper shape
+    modifier: Modifier = Modifier,
+    style: Style = Style
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(VerticalLayoutPadding), verticalArrangement = Arrangement.spacedBy(VerticalItemSpacing)) {
+    // Styles API owns the container: shape / surfaceContainer background / 16dp padding
+    // (previously a `Surface(onClick = {})` hack).
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .styleable(null, VoxlyStyles.verticalSettingsCard, style)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(VerticalItemSpacing)) {
         TitleSubtitleContent(title, subtitle, MaterialTheme.typography.titleMedium)
         val animatedWeights = rememberConnectedButtonWeights(
             options = options.map { it.value },
@@ -637,13 +668,14 @@ fun <T> ConnectedButtonGroupVerticalRow(
             }
         }
     }
+    }
 }
 
 /**
  * Segmented row with icon-only connected button group.
  * Shows only icons with tooltips for each option.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun <T> ConnectedIconOnlyButtonGroupRow(
     title: String,
@@ -653,13 +685,15 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
     onSelected: (T) -> Unit,
     index: Int = 0,
     count: Int = 1,
-    modifier: Modifier = Modifier
-) = SegmentedListItem(
-    onClick = {},
-    shapes = ListItemDefaults.segmentedShapes(index, count),
-    colors = ListItemDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
-    ),
+    modifier: Modifier = Modifier,
+    style: Style = Style
+) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
     leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
     trailingContent = {
         val animatedWeights = rememberConnectedButtonWeights(
@@ -721,9 +755,10 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
             }
         }
     },
-    modifier = modifier.fillMaxWidth(),
+    modifier = modifier.fillMaxWidth().styleable(null, VoxlyStyles.settingsRowStyle, style),
     content = {}
-)
+    )
+}
 
 // ============ Standard List Components (non-segmented) ============
 
@@ -731,30 +766,34 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
  * Standard list item with click action.
  * Uses ListItem with default shapes (not segmented).
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun StandardListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    style: Style = Style,
     leadingContent: @Composable (() -> Unit)? = null,
     trailingContent: @Composable (() -> Unit)? = null,
     overlineContent: @Composable (() -> Unit)? = null,
     supportingContent: @Composable (() -> Unit)? = null,
     content: @Composable () -> Unit
-) = ListItem(
-    onClick = onClick,
-    modifier = modifier,
-    enabled = enabled,
-    leadingContent = leadingContent,
-    trailingContent = trailingContent,
-    overlineContent = overlineContent,
-    supportingContent = supportingContent,
-    content = content
-)
+) {
+    val styleState = rememberUpdatedStyleState(null) { it.isEnabled = enabled }
+    ListItem(
+        onClick = onClick,
+        modifier = modifier.styleable(styleState, VoxlyStyles.settingsRowStyle, style),
+        enabled = enabled,
+        leadingContent = leadingContent,
+        trailingContent = trailingContent,
+        overlineContent = overlineContent,
+        supportingContent = supportingContent,
+        content = content
+    )
+}
 
 /** Standard clickable row - clickable list item without selection. */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun StandardClickableRow(
     title: String,
@@ -762,7 +801,8 @@ fun StandardClickableRow(
     leadingContent: @Composable (() -> Unit)? = null,
     trailingContent: @Composable (() -> Unit)? = null,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    style: Style = Style
 ) {
     ListItem(
         onClick = onClick,
@@ -771,7 +811,7 @@ fun StandardClickableRow(
         ),
         leadingContent = leadingContent,
         trailingContent = trailingContent,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().styleable(null, VoxlyStyles.settingsRowStyle, style)
     ) {
         Text(text = title, style = MaterialTheme.typography.bodyLarge)
         subtitle?.let {
@@ -787,7 +827,7 @@ fun StandardClickableRow(
 /**
  * Standard clickable row with more (three dots) menu button.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationStyleApi::class)
 @Composable
 fun StandardClickableRowWithMenu(
     title: String,
@@ -795,7 +835,8 @@ fun StandardClickableRowWithMenu(
     leadingContent: @Composable (() -> Unit)? = null,
     menuContent: @Composable () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    style: Style = Style
 ) {
     ListItem(
         onClick = onClick,
@@ -804,7 +845,7 @@ fun StandardClickableRowWithMenu(
         ),
         leadingContent = leadingContent,
         trailingContent = menuContent,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().styleable(null, VoxlyStyles.settingsRowStyle, style)
     ) {
         Text(text = title, style = MaterialTheme.typography.bodyLarge)
         subtitle?.let {
@@ -871,21 +912,45 @@ fun AudioFileStandardRow(
     },
     leadingContent = {
         val albumArtKey = sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
-        val cookieShape = MaterialShapes.Cookie9Sided.toShape()
-        val outerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        // 形状渐变源端（Level 2）：pop 时从目标页返回，匹配行需"从目标端圆角方形渐变回 Cookie"。
+        // 不用 scope 级 transition.animateFloat（非匹配行会集体形变）——用行级 Animatable：
+        // 初始 Cookie（settled）；match 形成瞬间 snapTo 圆角方形（此刻仍被目标页盖住、不可见），
+        // 再以与 bounds 相同的 spring 渐变回 Cookie——overlay 首帧形状连续，无跳变/闪。
+        val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+        val coverSharedState = if (canUseSharedTransition) {
+            with(sharedTransitionScope) { rememberSharedContentState(key = albumArtKey) }
+        } else {
+            null
+        }
+        val isCoverMatching = coverSharedState?.isMatchFound == true
+        val settledCookieShape = MaterialShapes.Cookie9Sided.toShape()
+        val coverShape = if (coverSharedState != null) {
+            val shapeProgress = remember { Animatable(0f) }
+            val morphSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+            LaunchedEffect(isCoverMatching) {
+                if (isCoverMatching) {
+                    shapeProgress.snapTo(1f)
+                    shapeProgress.animateTo(0f, morphSpec)
+                }
+            }
+            rememberCoverMorphShape(shapeProgress.value)
+        } else {
+            settledCookieShape
+        }
+        val outerModifier = if (canUseSharedTransition) {
             with(sharedTransitionScope) {
                 Modifier
                     .size(coverSize)
                     .sharedElement(
-                        rememberSharedContentState(key = albumArtKey),
+                        coverSharedState!!,
                         animatedVisibilityScope = animatedVisibilityScope
                     )
-                    .clip(cookieShape)
+                    .clip(coverShape)
             }
         } else {
             Modifier
                 .size(coverSize)
-                .clip(cookieShape)
+                .clip(coverShape)
         }
         Box(
             modifier = outerModifier,
@@ -897,7 +962,7 @@ fun AudioFileStandardRow(
                 contentDescription = null,
                 size = coverSize,
                 modifier = Modifier.fillMaxSize(),
-                clipShape = cookieShape
+                clipShape = coverShape
             ) {
                 Box(
                     modifier = Modifier
@@ -1128,21 +1193,44 @@ fun AudioFileStandardRowCompact(
     },
     leadingContent = {
         val albumArtKey = sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
-        val cookieShape = MaterialShapes.Cookie9Sided.toShape()
-            val outerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        // 形状渐变源端（Level 2，紧凑行）：pop 时从目标页返回，匹配行需"从目标端圆角方形渐变回 Cookie"。
+        // 行级 Animatable：match 形成瞬间 snapTo 圆角方形（此刻被目标页盖住、不可见），
+        // 再以与 bounds 相同的 spring 渐变回 Cookie——overlay 首帧形状连续，无跳变。
+        val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+        val coverSharedState = if (canUseSharedTransition) {
+            with(sharedTransitionScope) { rememberSharedContentState(key = albumArtKey) }
+        } else {
+            null
+        }
+        val isCoverMatching = coverSharedState?.isMatchFound == true
+        val settledCookieShape = MaterialShapes.Cookie9Sided.toShape()
+        val coverShape = if (coverSharedState != null) {
+            val shapeProgress = remember { Animatable(0f) }
+            val morphSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+            LaunchedEffect(isCoverMatching) {
+                if (isCoverMatching) {
+                    shapeProgress.snapTo(1f)
+                    shapeProgress.animateTo(0f, morphSpec)
+                }
+            }
+            rememberCoverMorphShape(shapeProgress.value)
+        } else {
+            settledCookieShape
+        }
+            val outerModifier = if (canUseSharedTransition) {
                 with(sharedTransitionScope) {
                     Modifier
                         .size(coverSize)
                         .sharedElement(
-                            rememberSharedContentState(key = albumArtKey),
+                            coverSharedState!!,
                             animatedVisibilityScope = animatedVisibilityScope
                         )
-                        .clip(cookieShape)
+                        .clip(coverShape)
                 }
             } else {
                 Modifier
                     .size(coverSize)
-                    .clip(cookieShape)
+                    .clip(coverShape)
             }
             Box(
                 modifier = outerModifier,
@@ -1154,7 +1242,7 @@ fun AudioFileStandardRowCompact(
                         contentDescription = null,
                         size = coverSize,
                         modifier = Modifier.fillMaxSize(),
-                        clipShape = cookieShape
+                        clipShape = coverShape
                     ) {
                         Box(
                             modifier = Modifier

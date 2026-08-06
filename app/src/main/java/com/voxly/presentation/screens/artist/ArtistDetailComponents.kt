@@ -3,6 +3,7 @@ package com.voxly.presentation.screens.artist
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +49,7 @@ import com.voxly.presentation.theme.ExpressiveTypography
 import com.voxly.presentation.theme.rememberSharedElementBoundsTransform
 import com.voxly.presentation.theme.rememberSharedElementTextBoundsTransform
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.rememberCoverMorphShape
 
 /**
  * Hero 区域：杂志大字报风格
@@ -208,7 +213,29 @@ fun SongListItem(
 ) {
     val coverKey = createAlbumArtSharedElementKey(audioFile.path)
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
-    val coverShape = MaterialShapes.Cookie9Sided.toShape()
+    // Level 2 形状渐变源端（艺术家详情页歌曲行）：pop 时从目标页返回，匹配行需"从目标端
+    // 圆角方形渐变回 Cookie"。行级 Animatable：match 形成瞬间 snapTo 圆角方形（此刻被
+    // 目标页盖住、不可见），再以与 bounds 相同的 spring 渐变回 Cookie——overlay 首帧连续。
+    val coverSharedState = if (canUseSharedTransition) {
+        with(sharedTransitionScope) { rememberSharedContentState(key = coverKey) }
+    } else {
+        null
+    }
+    val isCoverMatching = coverSharedState?.isMatchFound == true
+    val settledCookieShape = MaterialShapes.Cookie9Sided.toShape()
+    val coverShape = if (coverSharedState != null) {
+        val shapeProgress = remember { Animatable(0f) }
+        val morphSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+        LaunchedEffect(isCoverMatching) {
+            if (isCoverMatching) {
+                shapeProgress.snapTo(1f)
+                shapeProgress.animateTo(0f, morphSpec)
+            }
+        }
+        rememberCoverMorphShape(shapeProgress.value)
+    } else {
+        settledCookieShape
+    }
 
     ListItem(
         modifier = modifier.clickable(onClick = onClick),
@@ -222,7 +249,7 @@ fun SongListItem(
                         Modifier
                             .size(48.dp)
                             .sharedElement(
-                                rememberSharedContentState(key = coverKey),
+                                coverSharedState!!,
                                 animatedVisibilityScope = animatedVisibilityScope
                             )
                             .clip(coverShape)

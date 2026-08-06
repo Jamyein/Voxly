@@ -67,6 +67,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -288,6 +289,7 @@ fun LogViewerScreen(
 
 // ===================== Log file list =====================
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LogFileList(
     logFiles: List<LogFileItem>,
@@ -332,8 +334,6 @@ private fun LogFileList(
             }
         }
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
         if (isLoading && logFiles.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -362,28 +362,114 @@ private fun LogFileList(
                 }
             }
         } else {
+            // Group by type: regular logs and crash reports, each with a sticky header
+            val (regularLogs, crashLogs) = logFiles.partition { !it.isCrash }
             LazyColumn(
                 contentPadding = libraryContentPadding(start = 16.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(logFiles, key = { it.name }) { item ->
-                    LogFileCard(item = item, onClick = { onFileClick(item) })
+                if (regularLogs.isNotEmpty()) {
+                    stickyHeader {
+                        LogSectionHeader(
+                            title = stringResource(R.string.log_viewer_section_logs),
+                            count = regularLogs.size
+                        )
+                    }
+                    items(regularLogs, key = { it.name }) { item ->
+                        LogFileCard(
+                            item = item,
+                            onClick = { onFileClick(item) },
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                            )
+                        )
+                    }
+                }
+                if (crashLogs.isNotEmpty()) {
+                    stickyHeader {
+                        LogSectionHeader(
+                            title = stringResource(R.string.log_viewer_section_crash),
+                            count = crashLogs.size,
+                            isError = true
+                        )
+                    }
+                    items(crashLogs, key = { it.name }) { item ->
+                        LogFileCard(
+                            item = item,
+                            onClick = { onFileClick(item) },
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                fadeOutSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                                placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+                            )
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+/** Uppercase section header with a count pill, styled like other list sections. */
+@Composable
+private fun LogSectionHeader(
+    title: String,
+    count: Int,
+    isError: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelLarge.copy(
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Box(
+            modifier = Modifier
+                .background(
+                    color = if (isError) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    shape = RoundedCornerShape(50)
+                )
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isError) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LogFileCard(
     item: LogFileItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val isCrash = item.name.startsWith("crash_")
-
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
@@ -399,7 +485,7 @@ private fun LogFileCard(
                 modifier = Modifier
                     .size(40.dp)
                     .background(
-                        color = if (isCrash) {
+                        color = if (item.isCrash) {
                             MaterialTheme.colorScheme.errorContainer
                         } else {
                             MaterialTheme.colorScheme.secondaryContainer
@@ -409,11 +495,11 @@ private fun LogFileCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isCrash) Icons.Default.BugReport else Icons.AutoMirrored.Filled.Article,
+                    imageVector = if (item.isCrash) Icons.Default.BugReport else Icons.AutoMirrored.Filled.Article,
                     contentDescription = stringResource(
-                        if (isCrash) R.string.log_viewer_crash_file else R.string.log_viewer_log_file
+                        if (item.isCrash) R.string.log_viewer_crash_file else R.string.log_viewer_log_file
                     ),
-                    tint = if (isCrash) {
+                    tint = if (item.isCrash) {
                         MaterialTheme.colorScheme.onErrorContainer
                     } else {
                         MaterialTheme.colorScheme.onSecondaryContainer
@@ -425,11 +511,33 @@ private fun LogFileCard(
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (item.isCrash) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    shape = RoundedCornerShape(50)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.log_viewer_crash_file),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = item.lastModified,

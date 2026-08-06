@@ -8,16 +8,21 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.size.Precision
 import coil3.size.Size
 import com.voxly.data.local.cover.CoverUriProvider
+import com.voxly.presentation.components.AlbumCoverDecodeSize
 import kotlinx.coroutines.delay
 
 private const val PRELOAD_AHEAD_DEFAULT = 5
-private const val PRELOAD_SIZE_PX = 300
 private const val PRELOAD_BEHIND_DEFAULT = 2
+// 列表行封面（48-72dp 显示）的预加载像素：200px 覆盖所有密度的行封面显示，避免硬编码 300px
+// 对网格封面（[AlbumCoverDecodeSize] 解码）造成小尺寸条目复用（INEXACT 兼容范围内会直接拿小图放大）。
+private const val PRELOAD_LIST_PX = 200
 
 /**
  * A cover source as resolved by the renderer: (filePath, mediaStoreAlbumId).
@@ -36,7 +41,8 @@ fun LazyListCoverPreloader(
     CoverPreloader(
         firstVisibleIndex = firstVisibleIndex,
         visibleItemCount = visibleItemCount,
-        covers = covers
+        covers = covers,
+        preloadSizePx = PRELOAD_LIST_PX
     )
 }
 
@@ -47,10 +53,12 @@ fun LazyGridCoverPreloader(
 ) {
     val firstVisibleIndex by remember { derivedStateOf { gridState.firstVisibleItemIndex } }
     val visibleItemCount by remember { derivedStateOf { gridState.layoutInfo.visibleItemsInfo.size } }
+    val density = LocalDensity.current
     CoverPreloader(
         firstVisibleIndex = firstVisibleIndex,
         visibleItemCount = visibleItemCount,
-        covers = covers
+        covers = covers,
+        preloadSizePx = with(density) { AlbumCoverDecodeSize.roundToPx() }
     )
 }
 
@@ -58,7 +66,8 @@ fun LazyGridCoverPreloader(
 private fun CoverPreloader(
     firstVisibleIndex: Int,
     visibleItemCount: Int,
-    covers: List<CoverSource>
+    covers: List<CoverSource>,
+    preloadSizePx: Int
 ) {
     if (covers.isEmpty()) return
 
@@ -93,7 +102,7 @@ private fun CoverPreloader(
                         imageLoader.enqueue(
                             ImageRequest.Builder(platformContext)
                                 .data(coverUri)
-                                .size(Size(PRELOAD_SIZE_PX, PRELOAD_SIZE_PX))
+                                .size(Size(preloadSizePx, preloadSizePx))
                                 .precision(Precision.INEXACT)
                                 .memoryCacheKey(coverUri.toString())
                                 .build()

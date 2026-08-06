@@ -45,8 +45,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.window.core.layout.WindowSizeClass
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.collectAsState
@@ -75,6 +75,7 @@ import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
 import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
+import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.icons.AppIcon
@@ -111,6 +112,7 @@ import com.voxly.presentation.viewmodel.LibraryBatchViewModel
 import com.voxly.presentation.viewmodel.LibraryScanViewModel
 import com.voxly.presentation.viewmodel.LibrarySettingsViewModel
 import com.voxly.presentation.viewmodel.LibraryViewModel
+import com.voxly.presentation.viewmodel.NavigationStateViewModel
 import com.voxly.presentation.viewmodel.LyricsPosterViewModel
 import com.voxly.presentation.viewmodel.LyricsSelectorViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
@@ -236,11 +238,14 @@ fun MP3TagNavHost() {
     val librarySettingsViewModel: LibrarySettingsViewModel = hiltViewModel()
     val libraryBatchViewModel: LibraryBatchViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
+    val navigationStateViewModel: NavigationStateViewModel = hiltViewModel()
 
     val settingsUiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     val floatingBottomNavEnabled = settingsUiState.floatingBottomNavEnabled
 
-    val topLevelBackStack = rememberTopLevelBackStack(FileBrowser)
+    // Held in an activity-scoped ViewModel so the navigation position survives activity
+    // recreation (e.g. the system relaunch on the first per-app locale application).
+    val topLevelBackStack = navigationStateViewModel.topLevelBackStack
 
     var pendingLyrics by remember { mutableStateOf<String?>(null) }
     var pendingCoverArt by remember { mutableStateOf<ByteArray?>(null) }
@@ -545,6 +550,26 @@ private fun MP3TagNavDisplay(
     onPendingLyricsSet: (String) -> Unit,
     onPendingCoverArtSet: (ByteArray) -> Unit
 ) {
+    // 列表→编辑器/详情的封面 URI 快速通道：点击时用 CoverUriProvider 解析与列表行完全相同的 URI
+    // （列表行渲染时已填充其静态 folder/embedded 缓存，命中 µs 级）随 NavKey 传入目标端 →
+    // 目标端首帧 model 与列表行同 memoryCacheKey → 命中内存缓存 → 共享过渡首帧直接出图，
+    // 消除"过渡开始时目标端无图 → 占位闪烁"（专辑详情 MediaStore 场景目标端同步构造同 URI 已命中）。
+    val context = LocalContext.current
+    val coverUriProvider = remember(context) { CoverUriProvider(context.applicationContext) }
+    val navScope = rememberCoroutineScope()
+    val navigateToMetadataEditor: (String, String?) -> Unit = remember(
+        topLevelBackStack, coverUriProvider, navScope
+    ) {
+        { filePath, coverTag ->
+            navScope.launch {
+                val uri = coverUriProvider.getCoverUri(albumId = null, filePath = filePath)
+                topLevelBackStack.add(
+                    MetadataEditor(filePath, coverTag ?: "", coverUri = uri?.toString() ?: "")
+                )
+            }
+        }
+    }
+
     NavDisplay(
         backStack = topLevelBackStack.backStack,
         entryDecorators = listOf(
@@ -562,9 +587,7 @@ private fun MP3TagNavDisplay(
                     onNavigateToDirectory = { directoryUri, directoryName ->
                         topLevelBackStack.add(DirectoryContent(directoryUri, directoryName))
                     },
-                    onNavigateToMetadata = { filePath, coverTag ->
-                        topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                    },
+                    onNavigateToMetadata = navigateToMetadataEditor,
                     onNavigateToOnlineMetadata = {},
                     onNavigateToOnlineLyricsSearch = {},
                     onNavigateToOnlineCoverSearch = {},
@@ -580,11 +603,21 @@ private fun MP3TagNavDisplay(
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 AlbumAdaptiveScreen(
                     onNavigateToAlbumDetail = { albumGroup ->
-                        topLevelBackStack.add(AlbumDetail(albumGroup.name, albumGroup.albumArtist ?: ""))
+                        // 携带列表页已渲染的封面来源（与 AlbumGridItem 的选图逻辑一致），
+                        // 详情页首帧即可命中同一 memoryCacheKey 的位图。
+                        val coverFile = albumGroup.files.firstOrNull {
+                            it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                        } ?: albumGroup.files.firstOrNull()
+                        topLevelBackStack.add(
+                            AlbumDetail(
+                                albumName = albumGroup.name,
+                                albumArtist = albumGroup.albumArtist ?: "",
+                                initialCoverAlbumId = coverFile?.mediaStoreAlbumId ?: 0,
+                                initialCoverPath = coverFile?.path ?: "",
+                            )
+                        )
                     },
-                    onNavigateToMetadata = { filePath, coverTag ->
-                        topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                    },
+                    onNavigateToMetadata = navigateToMetadataEditor,
                     onNavigateBack = {},
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
@@ -606,12 +639,21 @@ private fun MP3TagNavDisplay(
                     onSearchDismiss = { showSearchSheet = false },
                     onSearchFileClick = { audioFile ->
                         showSearchSheet = false
-                        topLevelBackStack.add(
-                            MetadataEditor(
-                                audioFile.path,
-                                createAlbumArtSharedElementKey(audioFile.path)
+                        navScope.launch {
+                            // 搜索结果文件可能未在列表中渲染过——用 albumId 走与列表行完全相同的
+                            // 解析参数，folder/embedded 缓存命中或直接解析都得到列表行同款 URI。
+                            val uri = coverUriProvider.getCoverUri(
+                                audioFile.mediaStoreAlbumId,
+                                audioFile.path
                             )
-                        )
+                            topLevelBackStack.add(
+                                MetadataEditor(
+                                    audioFile.path,
+                                    createAlbumArtSharedElementKey(audioFile.path),
+                                    coverUri = uri?.toString() ?: ""
+                                )
+                            )
+                        }
                     },
                     modifier = Modifier.fillMaxSize(),
                     sharedTransitionScope = sharedTransitionScope,
@@ -636,9 +678,7 @@ private fun MP3TagNavDisplay(
                     settingsViewModel = librarySettingsViewModel,
                     batchViewModel = libraryBatchViewModel,
                     onNavigateBack = { topLevelBackStack.removeLast() },
-                    onNavigateToMetadata = { filePath, coverTag ->
-                        topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                    },
+                    onNavigateToMetadata = navigateToMetadataEditor,
                     onNavigateToReplayGain = { filePaths ->
                         topLevelBackStack.add(ReplayGainScanner(filePaths))
                     },
@@ -687,7 +727,7 @@ private fun MP3TagNavDisplay(
                 clazzContentKey = { key -> "ReplayGainScanner_${key.filePaths.hashCode()}" },
                 metadata = sharedAxisXMetadata()
             ) { key ->
-                ReplayGainScannerEntry(key, topLevelBackStack)
+                ReplayGainScannerEntry(key, topLevelBackStack, coverUriProvider, navScope)
             }
 
             entry<OnlineMetadata>(
@@ -733,6 +773,8 @@ private fun MP3TagNavDisplay(
                 AlbumDetailEntry(
                     key = key,
                     topLevelBackStack = topLevelBackStack,
+                    coverUriProvider = coverUriProvider,
+                    navScope = navScope,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
                 )
@@ -746,6 +788,8 @@ private fun MP3TagNavDisplay(
                 ArtistDetailEntry(
                     key = key,
                     topLevelBackStack = topLevelBackStack,
+                    coverUriProvider = coverUriProvider,
+                    navScope = navScope,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
                 )
@@ -811,6 +855,7 @@ private fun MetadataEditorEntry(
         viewModel = viewModel,
         coverTag = key.coverTag.takeIf { it.isNotEmpty() },
         sharedElementKey = key.coverTag.takeIf { it.isNotEmpty() },
+        coverUri = key.coverUri.takeIf { it.isNotEmpty() },
         onNavigateBack = { topLevelBackStack.removeLast() },
         onNavigateToOnlineMetadata = {
             topLevelBackStack.add(OnlineMetadata(key.filePath))
@@ -841,7 +886,12 @@ private fun MetadataEditorEntry(
 }
 
 @Composable
-private fun ReplayGainScannerEntry(key: ReplayGainScanner, topLevelBackStack: TopLevelBackStack<NavKey>) {
+private fun ReplayGainScannerEntry(
+    key: ReplayGainScanner,
+    topLevelBackStack: TopLevelBackStack<NavKey>,
+    coverUriProvider: CoverUriProvider,
+    navScope: CoroutineScope,
+) {
     val viewModel = hiltViewModel<ReplayGainViewModel, ReplayGainViewModel.Factory>(
         creationCallback = { factory -> factory.create(key) }
     )
@@ -849,8 +899,13 @@ private fun ReplayGainScannerEntry(key: ReplayGainScanner, topLevelBackStack: To
         filePaths = key.filePaths,
         onNavigateBack = { topLevelBackStack.removeLast() },
         onNavigateToMetadata = { filePath, coverTag ->
-            topLevelBackStack.removeLast()
-            topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
+            navScope.launch {
+                topLevelBackStack.removeLast()
+                val uri = coverUriProvider.getCoverUri(albumId = null, filePath = filePath)
+                topLevelBackStack.add(
+                    MetadataEditor(filePath, coverTag ?: "", coverUri = uri?.toString() ?: "")
+                )
+            }
         }
     )
 }
@@ -964,6 +1019,8 @@ private fun LyricsPosterEntry(key: LyricsPoster, topLevelBackStack: TopLevelBack
 private fun AlbumDetailEntry(
     key: AlbumDetail,
     topLevelBackStack: TopLevelBackStack<NavKey>,
+    coverUriProvider: CoverUriProvider,
+    navScope: CoroutineScope,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
@@ -973,15 +1030,26 @@ private fun AlbumDetailEntry(
         creationCallback = { factory -> factory.create(key) }
     )
     val albumOnNavigateBack = remember(topLevelBackStack) { { topLevelBackStack.removeLast(); Unit } }
-    val albumOnNavigateToMetadata = remember(topLevelBackStack) { { filePath: String, coverTag: String? ->
-        topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
-    } }
+    val albumOnNavigateToMetadata: (String, String?) -> Unit = remember(
+        topLevelBackStack, coverUriProvider, navScope
+    ) {
+        { filePath: String, coverTag: String? ->
+            navScope.launch {
+                val uri = coverUriProvider.getCoverUri(albumId = null, filePath = filePath)
+                topLevelBackStack.add(
+                    MetadataEditor(filePath, coverTag ?: "", coverUri = uri?.toString() ?: "")
+                )
+            }
+        }
+    }
     AlbumDetailScreen(
         albumName = key.albumName,
         albumArtist = key.albumArtist.takeIf { it.isNotEmpty() },
         onNavigateBack = albumOnNavigateBack,
         onNavigateToMetadata = albumOnNavigateToMetadata,
         viewModel = viewModel,
+        initialCoverPath = key.initialCoverPath.takeIf { it.isNotEmpty() },
+        initialCoverAlbumId = key.initialCoverAlbumId.takeIf { it > 0 },
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
     )
@@ -991,6 +1059,8 @@ private fun AlbumDetailEntry(
 private fun ArtistDetailEntry(
     key: ArtistDetail,
     topLevelBackStack: TopLevelBackStack<NavKey>,
+    coverUriProvider: CoverUriProvider,
+    navScope: CoroutineScope,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
@@ -999,9 +1069,18 @@ private fun ArtistDetailEntry(
         creationCallback = { factory -> factory.create(key) }
     )
     val artistOnNavigateBack = remember(topLevelBackStack) { { topLevelBackStack.removeLast(); Unit } }
-    val artistOnNavigateToMetadata = remember(topLevelBackStack) { { filePath: String, coverTag: String? ->
-        topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
-    } }
+    val artistOnNavigateToMetadata: (String, String?) -> Unit = remember(
+        topLevelBackStack, coverUriProvider, navScope
+    ) {
+        { filePath: String, coverTag: String? ->
+            navScope.launch {
+                val uri = coverUriProvider.getCoverUri(albumId = null, filePath = filePath)
+                topLevelBackStack.add(
+                    MetadataEditor(filePath, coverTag ?: "", coverUri = uri?.toString() ?: "")
+                )
+            }
+        }
+    }
     val artistOnNavigateToAlbumDetail = remember(topLevelBackStack) { { albumName: String, albumArtist: String? ->
         topLevelBackStack.add(AlbumDetail(albumName, albumArtist ?: ""))
     } }

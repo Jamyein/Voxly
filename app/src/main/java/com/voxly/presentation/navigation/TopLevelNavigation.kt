@@ -1,10 +1,8 @@
 package com.voxly.presentation.navigation
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.navigation3.runtime.NavKey
@@ -55,9 +53,4 @@ class TopLevelBackStack<T: Any>(startKey: T) {
         }
         return false
     }
-}
-
-@Composable
-fun rememberTopLevelBackStack(startRoute: NavKey): TopLevelBackStack<NavKey> {
-    return remember { TopLevelBackStack(startRoute) }
 }

@@ -27,7 +27,8 @@ data class LogFileItem(
     val name: String,
     val file: File,
     val size: String,
-    val lastModified: String
+    val lastModified: String,
+    val isCrash: Boolean = false
 )
 
 data class LogViewerUiState(
@@ -70,7 +71,8 @@ class LogViewerViewModel @Inject constructor() : ViewModel() {
                         name = file.name,
                         file = file,
                         size = LogManager.formatLogSize(file.length()),
-                        lastModified = dateFormat.format(Date(file.lastModified()))
+                        lastModified = dateFormat.format(Date(file.lastModified())),
+                        isCrash = file.name.startsWith("crash_")
                     )
                 }
 

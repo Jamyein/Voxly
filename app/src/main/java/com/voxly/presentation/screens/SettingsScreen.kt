@@ -1,6 +1,5 @@
 package com.voxly.presentation.screens
 
-import android.app.Activity
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.animateContentSize
@@ -53,11 +52,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Looks3
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.LooksTwo
@@ -70,7 +66,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -96,6 +91,7 @@ import com.voxly.presentation.components.SegmentedSwitchRow
 import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.components.SortDropdownMenu
 import com.voxly.presentation.components.SortMenuItem
+import com.voxly.presentation.components.ThemeModeSelector
 import com.voxly.presentation.components.TopBarTheme
 import com.voxly.presentation.components.VoxlyScaffold
 import com.voxly.presentation.components.VoxlyTopAppBar
@@ -406,9 +402,6 @@ fun SettingsScreen(
     listState: LazyListState = rememberLazyListState(),
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
-    val activity = context as? Activity
-
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var languageExpanded by remember { mutableStateOf(false) }
@@ -468,7 +461,6 @@ fun SettingsScreen(
                 onSetLanguage = { tag ->
                     viewModel.setLanguage(tag)
                     languageExpanded = false
-                    activity?.recreate()
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -588,17 +580,11 @@ private fun AppearanceSettingsSection(
     } ?: languageOptions.first()
 
     SettingsSection(title = stringResource(R.string.settings_section_appearance), modifier = modifier) {
-        ConnectedIconOnlyButtonGroupRow(
-            title = stringResource(R.string.settings_theme),
-            options = listOf(
-                SegmentedOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
-                SegmentedOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
-                SegmentedOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
-            ),
-            selectedValue = themeMode,
-            onSelected = onSetThemeMode,
-            index = 0,
-            count = 5
+        // Theme selector: a Styles-API preview card (visual upgrade over the old icon-only
+        // button group). The card owns its own title/subtitle, so it replaces the old row.
+        ThemeModeSelector(
+            selectedMode = themeMode,
+            onSelected = onSetThemeMode
         )
 
         SegmentedSwitchRow(
@@ -606,8 +592,8 @@ private fun AppearanceSettingsSection(
             subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
             checked = dynamicColors,
             onCheckedChange = onSetDynamicColors,
-            index = 1,
-            count = 5
+            index = 0,
+            count = 4
         )
 
         SegmentedSwitchRow(
@@ -615,8 +601,8 @@ private fun AppearanceSettingsSection(
             subtitle = stringResource(R.string.settings_metadata_editor_dynamic_album_color_subtitle),
             checked = metadataEditorDynamicAlbumColor,
             onCheckedChange = onSetMetadataEditorDynamicAlbumColor,
-            index = 2,
-            count = 5
+            index = 1,
+            count = 4
         )
 
         SegmentedSwitchRow(
@@ -624,8 +610,8 @@ private fun AppearanceSettingsSection(
             subtitle = stringResource(R.string.settings_floating_bottom_nav_subtitle),
             checked = floatingBottomNavEnabled,
             onCheckedChange = onSetFloatingBottomNavEnabled,
-            index = 3,
-            count = 5
+            index = 2,
+            count = 4
         )
 
         SegmentedClickableRow(
@@ -672,8 +658,8 @@ private fun AppearanceSettingsSection(
                 }
             },
             onClick = { },
-            index = 4,
-            count = 5,
+            index = 3,
+            count = 4,
             modifier = Modifier.fillMaxWidth()
         )
     }

@@ -25,8 +25,10 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
@@ -61,6 +63,7 @@ import timber.log.Timber
 import com.voxly.R
 import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.AlbumCoverDecodeSize
 import com.voxly.presentation.components.TopBarTheme
 import com.voxly.presentation.components.VoxlyScaffold
 import com.voxly.presentation.components.VoxlyTopAppBar
@@ -214,11 +217,27 @@ fun AlbumDetailScreen(
                                 )
                             } else null
                         }
+                        // 封面圆角随共享过渡的 bounds 弹簧同步渐变（Level 2 目标端）：
+                        // push 时从列表端 12dp 圆角渐变到详情端 28dp。transition.animateFloat 与
+                        // bounds 动画挂在同一个 AnimatedVisibilityScope 过渡上（bounds 是它的子过渡），
+                        // 同源同 spec → 帧同步，无相位误差。
+                        val coverShape = if (canUseSharedTransition) {
+                            val corner by animatedVisibilityScope.transition.animateFloat(
+                                transitionSpec = { MaterialTheme.motionScheme.defaultSpatialSpec() },
+                                label = "albumDetailCoverCornerMorph",
+                                targetValueByState = { state ->
+                                    if (state == EnterExitState.Visible) 28f else 12f
+                                }
+                            )
+                            RoundedCornerShape(corner.dp)
+                        } else {
+                            MaterialTheme.shapes.extraLarge
+                        }
                         Box(
                             modifier = if (canUseSharedTransition) {
                                 with(sharedTransitionScope) {
                                     Modifier
-                                        .size(240.dp)
+                                        .size(AlbumCoverDecodeSize)
                                         .aspectRatio(1f)
                                         .sharedElement(
                                             rememberSharedContentState(key = albumCoverKey),
@@ -229,20 +248,20 @@ fun AlbumDetailScreen(
                             } else {
                                 Modifier
                             }
-                                .size(240.dp)
+                                .size(AlbumCoverDecodeSize)
                                 .aspectRatio(1f)
-                                .shadow(8.dp, shape = MaterialTheme.shapes.extraLarge)
-                                .clip(MaterialTheme.shapes.extraLarge)
+                                .shadow(8.dp, shape = coverShape)
+                                .clip(coverShape)
                         ) {
                             AlbumArtImage(
                                 filePath = coverPath ?: firstFile?.path ?: initialCoverPath,
                                 albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
                                     ?: initialCoverAlbumId,
                                 contentDescription = stringResource(R.string.album_cover),
-                                size = 240.dp,
+                                size = AlbumCoverDecodeSize,
                                 modifier = Modifier.fillMaxSize(),
                                 preResolvedUri = quickCoverUri,
-                                clipShape = MaterialTheme.shapes.extraLarge,
+                                clipShape = coverShape,
                                 // The shared memory cache already hands back the list page's decoded
                                 // bitmap on the first frame — a crossfade on top of the shared-element
                                 // bounds morph is just a second simultaneous animation (frame cost).

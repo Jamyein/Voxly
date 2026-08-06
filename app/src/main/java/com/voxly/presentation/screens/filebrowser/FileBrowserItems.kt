@@ -3,6 +3,7 @@ package com.voxly.presentation.screens.filebrowser
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -28,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,6 +45,7 @@ import com.voxly.R
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.AlbumCoverDecodeSize
 import com.voxly.presentation.components.rememberRoleAccent
 import com.voxly.presentation.components.roleAccentGradient
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
@@ -172,6 +176,31 @@ internal fun AlbumGridItem(
     }
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
 
+    // 封面圆角在共享过渡中渐变（Level 2：push/pop 双向）。overlay 渲染目标端内容的实时快照，
+    // 两端各自驱动圆角。pop 时从详情页返回，匹配瓦片需"从目标端 28dp 渐变回 12dp"：
+    // 用行级 Animatable——match 形成瞬间 snapTo 28dp（此刻被详情页盖住、不可见），再以与
+    // bounds 相同的 spring 渐变回 12dp——overlay 首帧圆角连续，无跳变/闪。非匹配瓦片保持 12dp。
+    val coverSharedState = if (canUseSharedTransition) {
+        with(sharedTransitionScope) { rememberSharedContentState(key = albumCoverKey) }
+    } else {
+        null
+    }
+    val isCoverMatching = coverSharedState?.isMatchFound == true
+    val settledGridShape = MaterialTheme.shapes.medium
+    val coverShape = if (coverSharedState != null) {
+        val cornerAnim = remember { Animatable(12f) }
+        val morphSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+        LaunchedEffect(isCoverMatching) {
+            if (isCoverMatching) {
+                cornerAnim.snapTo(28f)
+                cornerAnim.animateTo(12f, morphSpec)
+            }
+        }
+        RoundedCornerShape(cornerAnim.value.dp)
+    } else {
+        settledGridShape
+    }
+
     // 无封面时用角色渐变 + 首字母占位；name hash 保证同一专辑颜色稳定（无需调用点传 index）
     val roleAccent = rememberRoleAccent(album.name)
 
@@ -187,12 +216,12 @@ internal fun AlbumGridItem(
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .sharedElement(
-                            rememberSharedContentState(key = albumCoverKey),
+                            coverSharedState!!,
                             animatedVisibilityScope = animatedVisibilityScope,
                             boundsTransform = rememberSharedElementBoundsTransform()
                         )
                         .clickable(interactionSource = interactionSource, onClick = onClick)
-                        .clip(MaterialTheme.shapes.medium)
+                        .clip(coverShape)
                         .scaleOnPress(interactionSource, label = "albumGridItemScale")
                 }
             } else {
@@ -200,7 +229,7 @@ internal fun AlbumGridItem(
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .clickable(interactionSource = interactionSource, onClick = onClick)
-                    .clip(MaterialTheme.shapes.medium)
+                    .clip(coverShape)
                     .scaleOnPress(interactionSource, label = "albumGridItemScale")
             },
             contentAlignment = Alignment.Center
@@ -210,9 +239,12 @@ internal fun AlbumGridItem(
                     filePath = coverFile.path,
                     albumId = coverFile.mediaStoreAlbumId,
                     contentDescription = null,
-                    size = 200.dp,
+                    // 与详情页一致的目标解码尺寸（单一共享常量）：同一缓存条目同时服务列表与详情，
+                    // 详情页最终态原生分辨率、无上采样；列表端由 painter 缩放到瓦片尺寸。
+                    size = AlbumCoverDecodeSize,
                     modifier = Modifier.fillMaxSize(),
-                    clipShape = MaterialTheme.shapes.medium
+                    clipShape = coverShape,
+                    crossfade = false
                 )
             } else {
                 Box(

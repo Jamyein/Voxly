@@ -1,10 +1,12 @@
 package com.voxly.presentation.screens.metadata
 
-import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -30,6 +32,8 @@ import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.RoleGradientBadge
 import com.voxly.presentation.components.rememberRoleAccent
 import com.voxly.presentation.theme.emphasizedTitleMedium
+import com.voxly.presentation.theme.rememberCoverMorphShape
+import com.voxly.presentation.theme.rememberSettledCoverShape
 
 /**
  * Album art section for metadata editor.
@@ -39,7 +43,9 @@ import com.voxly.presentation.theme.emphasizedTitleMedium
  * Uses Coil for background decoding to prevent main thread jank.
  *
  * @param albumArt Raw cover art bytes from ViewModel (direct from audio file)
- * @param fallbackBitmap MediaStore fallback bitmap (shown if no embedded cover)
+ * @param fallbackUri MediaStore album-art URI fallback (shown if no embedded cover). Loaded via
+ *   Coil at display resolution — the old path used a pre-decoded 300px Bitmap, which was
+ *   upscaled ~3x on the full-width cover (blurry).
  * @param onPickAlbumArt Callback to open album art picker
  * @param coverTag Optional shared element transition tag
  * @param onZoomAlbumArt Callback to zoom/view the cover art
@@ -51,7 +57,7 @@ import com.voxly.presentation.theme.emphasizedTitleMedium
 @Composable
 fun AlbumArtSection(
     albumArt: ByteArray?,
-    fallbackBitmap: Bitmap? = null,
+    fallbackUri: Uri? = null,
     onPickAlbumArt: () -> Unit,
     coverTag: String? = null,
     onZoomAlbumArt: () -> Unit,
@@ -66,7 +72,7 @@ fun AlbumArtSection(
     val context = LocalContext.current
     val shape = MaterialTheme.shapes.extraLarge
     val isAndroid12Plus = remember { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
-    val displayModel: Any? = albumArt ?: fallbackBitmap
+    val displayModel: Any? = albumArt ?: fallbackUri
 
     // 空态占位用角色渐变，filePath hash 保证同一文件颜色稳定
     val roleAccent = rememberRoleAccent(filePath ?: "")
@@ -83,6 +89,7 @@ fun AlbumArtSection(
                 displayModel?.let { model ->
                     val memoryKey = coverKey ?: when (model) {
                         is ByteArray -> "album_art_${model.contentHashCode()}"
+                        is Uri -> "album_art_$model"
                         else -> "album_art_${model.hashCode()}"
                     }
                     ImageRequest.Builder(context)
@@ -129,18 +136,50 @@ fun AlbumArtSection(
                 Modifier
             }
 
+            // Level 2 形状渐变目标端：progress 0→1 时 Cookie9Sided → 圆角方形（Morph 插值），
+            // 与 bounds 弹簧同源帧同步（transition.animateFloat 挂在同一个 AnimatedVisibilityScope
+            // 过渡上）。稳态（无共享过渡时）直接用 Morph 终点圆角方形，视觉上 ≈ extraLarge。
+            val coverShape = if (hasSharedElement) {
+                val progress by animatedContentScope.transition.animateFloat(
+                    transitionSpec = { MaterialTheme.motionScheme.defaultSpatialSpec() },
+                    label = "editorCoverMorph",
+                    targetValueByState = { state ->
+                        if (state == EnterExitState.Visible) 1f else 0f
+                    }
+                )
+                rememberCoverMorphShape(progress)
+            } else {
+                rememberSettledCoverShape()
+            }
+
+            // 占位层垫底 + onSuccess 门控（分层模式，同 AlbumArtImage）：解码期间不闪空白，
+            // 共享过渡结束时若位图尚未解码完成也不会露出空画布。
+            var coverImageLoaded by remember(albumArtRequest) { mutableStateOf(false) }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(sharedModifier)
-                    .clip(shape)
+                    .clip(coverShape)
             ) {
                 if (albumArtRequest != null) {
+                    if (!coverImageLoaded) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            EmptyAlbumArtContent(
+                                accent = roleAccent.accent,
+                                onAccent = roleAccent.onAccent
+                            )
+                        }
+                    }
                     AsyncImage(
                         model = albumArtRequest,
                         contentDescription = stringResource(R.string.cd_album_art),
-                        modifier = Modifier.fillMaxSize().clip(shape),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier.fillMaxSize().clip(coverShape),
+                        contentScale = ContentScale.Crop,
+                        onSuccess = { coverImageLoaded = true },
+                        onError = { coverImageLoaded = false }
                     )
                 } else {
                     Box(

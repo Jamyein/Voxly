@@ -35,6 +35,8 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.addAll(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
+            // Compose Styles API (experimental) — used by presentation/theme/ComponentStyles.kt
+            "-opt-in=androidx.compose.foundation.style.ExperimentalFoundationStyleApi",
             // Compose compiler metrics (uncomment to generate stability reports)
             // "-P",
             // "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=${layout.buildDirectory.asFile.get().resolve("compose-metrics").absolutePath}",
@@ -57,8 +59,8 @@ android {
         minSdk = 30
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 56
-        versionName = "1.7.8"
+        versionCode = 57
+        versionName = "1.7.9"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")

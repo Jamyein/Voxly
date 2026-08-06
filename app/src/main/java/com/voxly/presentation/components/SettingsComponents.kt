@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.style.ExperimentalFoundationStyleApi
+import androidx.compose.foundation.style.Style
+import androidx.compose.foundation.style.rememberUpdatedStyleState
+import androidx.compose.foundation.style.styleable
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -24,19 +28,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
+import com.voxly.presentation.theme.VoxlyStyles
 
+@OptIn(ExperimentalFoundationStyleApi::class)
 @Composable
 fun SettingsSection(
     title: String,
     modifier: Modifier = Modifier,
+    style: Style = Style,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(modifier = modifier) {
+        // Section title visuals (typography + color) live in VoxlyStyles.settingsSectionTitleStyle;
+        // callers can restyle every section title via the style parameter.
+        val titleStyleState = rememberUpdatedStyleState(null)
         Text(
             text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier
+                .padding(bottom = 8.dp)
+                .styleable(titleStyleState, VoxlyStyles.settingsSectionTitleStyle, style)
         )
 
         Column(

@@ -1,5 +1,6 @@
 package com.voxly.presentation
 
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -21,6 +23,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -103,15 +107,38 @@ class MainActivity : AppCompatActivity() {
                 else -> systemDarkTheme
             }
 
-            MP3TagTheme(
-                darkTheme = darkTheme,
-                dynamicColor = dynamicColors
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+            // In-app language switching: provide a Resources override so ALL Compose
+            // resource consumers (stringResource / colorResource / stringArrayResource …)
+            // recompose with the selected locale instantly — no activity recreation, no
+            // navigation reset. null (follow system) = the activity's own Resources, which
+            // follows the system config. AppCompatDelegate.setApplicationLocales() is still
+            // called on switch (SettingsViewModel.setLanguage) for the official per-app
+            // language sync (Android 13+ system settings), and android:configChanges on the
+            // activity makes AppCompat update resources in place instead of recreating.
+            val context = LocalContext.current
+            val savedLanguageTag = settingsUiState.savedLanguageTag
+            val localizedResources = remember(savedLanguageTag, context) {
+                if (savedLanguageTag == null) {
+                    context.resources
+                } else {
+                    val config = Configuration(context.resources.configuration).apply {
+                        setLocales(android.os.LocaleList.forLanguageTags(savedLanguageTag))
+                    }
+                    context.createConfigurationContext(config).resources
+                }
+            }
+
+            CompositionLocalProvider(LocalResources provides localizedResources) {
+                MP3TagTheme(
+                    darkTheme = darkTheme,
+                    dynamicColor = dynamicColors
                 ) {
-                    MP3TagNavHost()
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        MP3TagNavHost()
+                    }
                 }
             }
         }

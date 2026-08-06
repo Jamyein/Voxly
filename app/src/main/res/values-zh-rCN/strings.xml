@@ -386,6 +386,8 @@
     <string name="log_viewer_log_file">日志文件</string>
     <string name="log_viewer_copied_line">已复制该行</string>
     <string name="log_viewer_cleanup_confirm">删除所有日志文件？此操作无法撤销。</string>
+    <string name="log_viewer_section_logs">日志文件</string>
+    <string name="log_viewer_section_crash">崩溃报告</string>
 
     <!-- Dialogs -->
     <string name="dialog_close">关闭</string>
