@@ -178,6 +178,7 @@
     <string name="import_audio_files_or_select_folder">Import audio files or select a folder</string>
     <string name="file_search_hint">Search files, artist, album...</string>
     <string name="file_search_empty">No matching files found</string>
+    <string name="file_search_searching">Searching…</string>
     <string name="search_tip">Enter keywords to search</string>
     <string name="file_sort_label">Sort</string>
     <string name="file_sort_name_asc">Name (A-Z)</string>
@@ -403,8 +404,6 @@
     <string name="settings_source_netease_subtitle">Include NetEase Cloud Music results</string>
     <string name="settings_source_qq_music">Enable QQ Music</string>
     <string name="settings_source_qq_music_subtitle">Include QQ Music results</string>
-    <string name="settings_apple_country">Apple Store Region</string>
-    <string name="settings_apple_country_subtitle">Country/region used for iTunes search</string>
     <string name="settings_apple_country_us">United States (US)</string>
     <string name="settings_apple_country_cn">China (CN)</string>
     <string name="settings_apple_country_hk">Hong Kong (HK)</string>
@@ -425,12 +424,15 @@
     <string name="settings_online_search_limits_submenu">Search Limits</string>
     <string name="settings_online_search_limits_submenu_subtitle">Configure search result limits for each source</string>
     <string name="settings_source_group_metadata">Metadata Sources</string>
-    <string name="settings_source_group_metadata_subtitle">Enable and prioritize sources for metadata results</string>
     <string name="settings_source_group_lyrics">Lyrics Sources</string>
-    <string name="settings_source_group_lyrics_subtitle">Set priority used when searching timeline lyrics</string>
     <string name="settings_source_group_cover">Cover Sources</string>
-    <string name="settings_source_group_cover_subtitle">Set priority used when fetching cover artwork</string>
-    <string name="settings_source_priority_hint">Higher priority sources are shown first and used first.</string>
+    <string name="settings_source_card_hint">Drag cards to set priority. Toggle combined / lyrics / cover inside each card to choose where that source is used.</string>
+    <string name="settings_source_disabled_label">Disabled</string>
+    <string name="settings_source_panel_title">Data Sources</string>
+    <string name="settings_source_entry_subtitle">Enable and set priority for metadata, lyrics and cover sources</string>
+    <string name="settings_source_panel_metadata">Metadata</string>
+    <string name="settings_source_panel_lyrics">Lyrics</string>
+    <string name="settings_source_panel_cover">Cover</string>
     <string name="settings_lyrics_timestamp_format">Format Lyrics Timestamps</string>
     <string name="settings_lyrics_timestamp_format_subtitle">Format lyrics timestamps to 2-digit milliseconds</string>
 
@@ -511,9 +513,6 @@
     <string name="settings_min_duration_threshold">Minimum Duration Filter</string>
     <string name="settings_min_duration_threshold_subtitle">Skip files shorter than this</string>
     <string name="settings_drag_handle">Drag to reorder</string>
-    <string name="settings_drag_hint">Long press and drag to reorder</string>
-    <string name="settings_source_disable">Disable</string>
-    <string name="settings_source_enable">Enable</string>
     <string name="settings_separator_add">Add</string>
     <string name="settings_separator_delete_title">Delete Separator</string>
     <string name="settings_separator_delete_message">Are you sure you want to delete the separator "%s"?</string>

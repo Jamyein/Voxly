@@ -26,13 +26,12 @@ import timber.log.Timber
 private const val STATE_FLOW_TIMEOUT_MS = 5000L
 
 /**
- * Transient UI-only state for the source priority dialog: which dialog is open and the
- * current visual order of source IDs while dragging. Enabled flags / extra options are
- * intentionally NOT copied here — [dragDialogState] derives them live from DataStore so
- * switch toggles reflect immediately in the open dialog.
+ * Transient UI-only state for the source order editor: the current visual order of
+ * source IDs while dragging. Enabled flags / extra options are intentionally NOT
+ * copied here — [sourceOrderState] derives them live from DataStore so card toggles
+ * reflect immediately.
  */
 data class DragInteraction(
-    val sourceType: DataSourceType? = null,
     val order: List<String> = emptyList(),
     val draggedIndex: Int? = null,
     val dragOffset: Float = 0f,
@@ -42,9 +41,8 @@ data class DragInteraction(
 /**
  * UI state for the drag-to-reorder source priority dialog.
  */
-data class DragDialogState(
-    val sourceType: DataSourceType,
-    val sources: List<DragDialogSourceItem>,
+data class SourceOrderState(
+    val sources: List<SourceCardItem>,
     val draggedIndex: Int? = null,
     val dragOffset: Float = 0f,
     val originalDragIndex: Int? = null
@@ -53,9 +51,11 @@ data class DragDialogState(
 /**
  * Individual source item within the drag dialog.
  */
-data class DragDialogSourceItem(
+data class SourceCardItem(
     val sourceId: String,
-    val enabled: Boolean,
+    val enabledMetadata: Boolean,
+    val enabledLyrics: Boolean,
+    val enabledCover: Boolean,
     val order: Int,
     val extraOptions: Map<String, String> = emptyMap()
 )
@@ -70,8 +70,8 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     /**
-     * Transient drag interaction for the source priority dialog. Only the open type and
-     * the in-drag source ID order live here; item details are derived in [dragDialogState].
+     * Transient drag interaction for the source order editor. Only the in-drag source
+     * ID order lives here; item details are derived in [sourceOrderState].
      */
     private val _dragInteraction = MutableStateFlow(DragInteraction())
 
@@ -91,25 +91,29 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
-     * Drag dialog state — derived (not snapshotted) from persisted source configurations
-     * plus the transient drag interaction. Deriving keeps the open dialog's switches and
-     * iTunes country in sync with DataStore immediately, without re-opening the dialog.
+     * Source order state — derived (not snapshotted) from persisted source
+     * configurations plus the transient drag interaction. Builds a global
+     * per-source view (each card carries its enabled state per group); the
+     * global order is the shared priority for all three groups.
      */
-    val dragDialogState: StateFlow<DragDialogState?> = combine(
+    val sourceOrderState: StateFlow<SourceOrderState?> = combine(
         sourceConfigurations,
         _dragInteraction
     ) { config, interaction ->
-        val type = interaction.sourceType ?: return@combine null
-        val typeConfig = config.getConfig(type)
-        DragDialogState(
-            sourceType = type,
-            sources = interaction.order.map { sourceId ->
-                val source = typeConfig.getSource(sourceId)
-                DragDialogSourceItem(
+        if (interaction.order.isEmpty()) return@combine null
+        val metadataMap = config.metadata.sources.associateBy { it.sourceId }
+        val lyricsMap = config.lyrics.sources.associateBy { it.sourceId }
+        val coverMap = config.cover.sources.associateBy { it.sourceId }
+        SourceOrderState(
+            sources = interaction.order.mapNotNull { sourceId ->
+                val metadata = metadataMap[sourceId] ?: return@mapNotNull null
+                SourceCardItem(
                     sourceId = sourceId,
-                    enabled = source?.enabled ?: false,
-                    order = source?.order ?: 0,
-                    extraOptions = source?.extraOptions ?: emptyMap()
+                    enabledMetadata = metadata.enabled,
+                    enabledLyrics = lyricsMap[sourceId]?.enabled ?: false,
+                    enabledCover = coverMap[sourceId]?.enabled ?: false,
+                    order = metadata.order,
+                    extraOptions = metadata.extraOptions
                 )
             },
             draggedIndex = interaction.draggedIndex,
@@ -272,96 +276,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setSourceEnabledMusicBrainz(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.setSourceEnabledMusicBrainz(enabled)
-        }
-    }
-
-    fun setSourceEnabledITunes(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.setSourceEnabledITunes(enabled)
-        }
-    }
-
-    fun setSourceEnabledNetease(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.setSourceEnabledNetease(enabled)
-        }
-    }
-
-    fun setSourceEnabledQQMusic(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.setSourceEnabledQQMusic(enabled)
-        }
-    }
-
-    fun setMetadataSourceEnabledMusicBrainz(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setMetadataSourceEnabledMusicBrainz(enabled) }
-    }
-
-    fun setMetadataSourceEnabledITunes(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setMetadataSourceEnabledITunes(enabled) }
-    }
-
-    fun setMetadataSourceEnabledNetease(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setMetadataSourceEnabledNetease(enabled) }
-    }
-
-    fun setMetadataSourceEnabledQQMusic(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setMetadataSourceEnabledQQMusic(enabled) }
-    }
-
-    fun setLyricsSourceEnabledMusicBrainz(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setLyricsSourceEnabledMusicBrainz(enabled) }
-    }
-
-    fun setLyricsSourceEnabledITunes(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setLyricsSourceEnabledITunes(enabled) }
-    }
-
-    fun setLyricsSourceEnabledNetease(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setLyricsSourceEnabledNetease(enabled) }
-    }
-
-    fun setLyricsSourceEnabledQQMusic(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setLyricsSourceEnabledQQMusic(enabled) }
-    }
-
-    fun setCoverSourceEnabledMusicBrainz(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setCoverSourceEnabledMusicBrainz(enabled) }
-    }
-
-    fun setCoverSourceEnabledITunes(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setCoverSourceEnabledITunes(enabled) }
-    }
-
-    fun setCoverSourceEnabledNetease(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setCoverSourceEnabledNetease(enabled) }
-    }
-
-    fun setCoverSourceEnabledQQMusic(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setCoverSourceEnabledQQMusic(enabled) }
-    }
-
-    fun setMetadataSourcePriority(priority: List<String>) {
-        viewModelScope.launch {
-            settingsDataStore.setMetadataSourcePriority(priority)
-        }
-    }
-
-    fun setLyricsSourcePriority(priority: List<String>) {
-        viewModelScope.launch {
-            settingsDataStore.setLyricsSourcePriority(priority)
-        }
-    }
-
-    fun setCoverSourcePriority(priority: List<String>) {
-        viewModelScope.launch {
-            settingsDataStore.setCoverSourcePriority(priority)
-        }
-    }
-
     fun setLoggingEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.setLoggingEnabled(enabled)
@@ -431,20 +345,16 @@ class SettingsViewModel @Inject constructor(
     // ==================== Drag Dialog State Management ====================
 
     /**
-     * Open the priority dialog for a source type. Snapshots only the transient ordering
-     * (source IDs); enabled/extraOptions stay derived from DataStore via [dragDialogState].
+     * Open the source order editor: snapshot the current global order (union of
+     * the three groups, order-stable, de-duplicated) as the transient drag list.
      */
-    fun openDialog(type: DataSourceType) {
-        val order = sourceConfigurations.value.getConfig(type)
-            .sources.sortedBy { it.order }.map { it.sourceId }
-        _dragInteraction.value = DragInteraction(sourceType = type, order = order)
-    }
-
-    /**
-     * Clear drag dialog state
-     */
-    fun clearDragDialogState() {
-        _dragInteraction.value = DragInteraction()
+    fun openSourceOrder() {
+        val allIds = linkedSetOf<String>()
+        val config = sourceConfigurations.value
+        config.metadata.sources.sortedBy { it.order }.forEach { allIds += it.sourceId }
+        config.lyrics.sources.sortedBy { it.order }.forEach { allIds += it.sourceId }
+        config.cover.sources.sortedBy { it.order }.forEach { allIds += it.sourceId }
+        _dragInteraction.value = DragInteraction(order = allIds.toList())
     }
 
     /**
@@ -491,17 +401,28 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Persist a global source order: written to all three groups so every group
+     * shares the same priority (the card list IS the priority).
+     */
+    fun reorderSourcesGlobal(orderedSourceIds: List<String>) {
+        viewModelScope.launch {
+            settingsDataStore.reorderSources(DataSourceType.METADATA, orderedSourceIds)
+            settingsDataStore.reorderSources(DataSourceType.LYRICS, orderedSourceIds)
+            settingsDataStore.reorderSources(DataSourceType.COVER, orderedSourceIds)
+        }
+    }
+
+    /**
      * End dragging and persist the reordered list
      */
     fun endDragging() {
         val current = _dragInteraction.value
-        val type = current.sourceType ?: return
         val originalIdx = current.originalDragIndex
         val currentIdx = current.draggedIndex
 
         // Persist if order changed
         if (originalIdx != null && originalIdx != currentIdx) {
-            reorderSources(type, current.order)
+            reorderSourcesGlobal(current.order)
         }
 
         _dragInteraction.update {
@@ -522,7 +443,7 @@ class SettingsViewModel @Inject constructor(
 
         if (originalIdx != null) {
             // Re-fetch original order from persistent storage
-            current.sourceType?.let { openDialog(it) }
+            openSourceOrder()
         } else {
             _dragInteraction.update {
                 current.copy(

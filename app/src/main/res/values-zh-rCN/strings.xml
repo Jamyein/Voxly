@@ -111,6 +111,8 @@
     <string name="loading_audio_files">正在加载音频文件...</string>
     <string name="import_audio_files_or_select_folder">导入音频文件或选择文件夹</string>
     <string name="file_search_hint">搜索文件、艺术家、专辑...</string>
+    <string name="file_search_empty">没有找到匹配的文件</string>
+    <string name="file_search_searching">正在搜索…</string>
     <string name="search_tip">输入关键词进行搜索</string>
     <string name="file_sort_label">排序</string>
     <string name="file_sort_name_asc">名称 (A-Z)</string>
@@ -316,8 +318,6 @@
     <string name="settings_source_netease_subtitle">在线搜索中包含网易云结果</string>
     <string name="settings_source_qq_music">启用 QQ 音乐</string>
     <string name="settings_source_qq_music_subtitle">在线搜索中包含 QQ 音乐结果</string>
-    <string name="settings_apple_country">Apple 商店区域</string>
-    <string name="settings_apple_country_subtitle">iTunes 搜索使用的国家/地区</string>
     <string name="settings_apple_country_us">美国 (US)</string>
     <string name="settings_apple_country_cn">中国 (CN)</string>
     <string name="settings_apple_country_hk">中国香港 (HK)</string>
@@ -338,12 +338,15 @@
     <string name="settings_online_search_limits_submenu">搜索限制</string>
     <string name="settings_online_search_limits_submenu_subtitle">配置各来源的搜索结果限制</string>
     <string name="settings_source_group_metadata">组合数据源</string>
-    <string name="settings_source_group_metadata_subtitle">设置元数据搜索来源的开关和优先级</string>
     <string name="settings_source_group_lyrics">歌词数据源</string>
-    <string name="settings_source_group_lyrics_subtitle">设置时间轴歌词搜索的数据源优先级</string>
     <string name="settings_source_group_cover">封面数据源</string>
-    <string name="settings_source_group_cover_subtitle">设置封面获取的数据源优先级</string>
-    <string name="settings_source_priority_hint">优先级越高，结果越靠前，也会优先使用。</string>
+    <string name="settings_source_card_hint">拖动卡片调整优先级；卡片内勾选组合、歌词、封面，决定该数据源用于哪些场景。</string>
+    <string name="settings_source_disabled_label">未启用</string>
+    <string name="settings_source_panel_title">数据源设置</string>
+    <string name="settings_source_entry_subtitle">设置组合、歌词、封面数据源的开关与优先级</string>
+    <string name="settings_source_panel_metadata">组合</string>
+    <string name="settings_source_panel_lyrics">歌词</string>
+    <string name="settings_source_panel_cover">封面</string>
     <string name="settings_lyrics_timestamp_format">格式化歌词时间轴</string>
     <string name="settings_lyrics_timestamp_format_subtitle">将歌词时间轴格式化为二毫秒</string>
 
@@ -429,9 +432,6 @@
     <string name="settings_min_duration_threshold">最短时长过滤</string>
     <string name="settings_min_duration_threshold_subtitle">跳过短于此时长的文件</string>
     <string name="settings_drag_handle">拖动排序</string>
-    <string name="settings_drag_hint">长按并拖动以重新排序</string>
-    <string name="settings_source_disable">禁用</string>
-    <string name="settings_source_enable">启用</string>
     <string name="settings_separator_add">添加</string>
     <string name="settings_separator_delete_title">删除分隔符</string>
     <string name="settings_separator_delete_message">确定要删除分隔符"%s"吗？</string>

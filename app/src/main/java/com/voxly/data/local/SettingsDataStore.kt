@@ -534,16 +534,6 @@ class SettingsDataStore @Inject constructor(
     }
 
     /**
-     * Save unified source configurations
-     */
-    suspend fun setSourceConfigurations(config: SourceConfigurations) {
-        Timber.d("$TAG: setSourceConfigurations: metadata=${config.metadata.sources.map { "${it.sourceId}=${it.enabled}" }}, lyrics=${config.lyrics.sources.map { "${it.sourceId}=${it.enabled}" }}, cover=${config.cover.sources.map { "${it.sourceId}=${it.enabled}" }}")
-        context.settingsDataStore.edit { preferences ->
-            preferences[SourceConfig.CONFIGURATIONS] = json.encodeToString(config)
-        }
-    }
-
-    /**
      * Update a single source within a source type configuration
      * Also updates legacy preference keys for backward compatibility
      */
@@ -739,120 +729,6 @@ class SettingsDataStore @Inject constructor(
 
     private fun normalizeOnlineSearchLimit(limit: Int): Int {
         return if (limit <= 0) 0 else limit.coerceIn(5, 200)
-    }
-
-    suspend fun setSourceEnabledMusicBrainz(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[Source.ENABLED_MUSICBRAINZ] = enabled
-        }
-    }
-
-    suspend fun setSourceEnabledITunes(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[Source.ENABLED_ITUNES] = enabled
-        }
-    }
-
-    suspend fun setSourceEnabledNetease(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[Source.ENABLED_NETEASE] = enabled
-        }
-    }
-
-    suspend fun setSourceEnabledQQMusic(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[Source.ENABLED_QQ_MUSIC] = enabled
-        }
-    }
-
-    suspend fun setMetadataSourceEnabledMusicBrainz(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[MetadataSource.ENABLED_MUSICBRAINZ] = enabled
-        }
-    }
-
-    suspend fun setMetadataSourceEnabledITunes(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[MetadataSource.ENABLED_ITUNES] = enabled
-        }
-    }
-
-    suspend fun setMetadataSourceEnabledNetease(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[MetadataSource.ENABLED_NETEASE] = enabled
-        }
-    }
-
-    suspend fun setMetadataSourceEnabledQQMusic(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[MetadataSource.ENABLED_QQ_MUSIC] = enabled
-        }
-    }
-
-    suspend fun setLyricsSourceEnabledMusicBrainz(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[LyricsSource.ENABLED_MUSICBRAINZ] = enabled
-        }
-    }
-
-    suspend fun setLyricsSourceEnabledITunes(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[LyricsSource.ENABLED_ITUNES] = enabled
-        }
-    }
-
-    suspend fun setLyricsSourceEnabledNetease(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[LyricsSource.ENABLED_NETEASE] = enabled
-        }
-    }
-
-    suspend fun setLyricsSourceEnabledQQMusic(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[LyricsSource.ENABLED_QQ_MUSIC] = enabled
-        }
-    }
-
-    suspend fun setCoverSourceEnabledMusicBrainz(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[CoverSource.ENABLED_MUSICBRAINZ] = enabled
-        }
-    }
-
-    suspend fun setCoverSourceEnabledITunes(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[CoverSource.ENABLED_ITUNES] = enabled
-        }
-    }
-
-    suspend fun setCoverSourceEnabledNetease(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[CoverSource.ENABLED_NETEASE] = enabled
-        }
-    }
-
-    suspend fun setCoverSourceEnabledQQMusic(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[CoverSource.ENABLED_QQ_MUSIC] = enabled
-        }
-    }
-
-    suspend fun setMetadataSourcePriority(priority: List<String>) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[SourcePriority.METADATA] = normalizePriority(priority).joinToString(",")
-        }
-    }
-
-    suspend fun setLyricsSourcePriority(priority: List<String>) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[SourcePriority.LYRICS] = normalizePriority(priority).joinToString(",")
-        }
-    }
-
-    suspend fun setCoverSourcePriority(priority: List<String>) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[SourcePriority.COVER] = normalizePriority(priority).joinToString(",")
-        }
     }
 
     suspend fun setLoggingEnabled(enabled: Boolean) {

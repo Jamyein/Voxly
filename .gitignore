@@ -93,9 +93,9 @@ local.properties
 !README*.md
 !readme*.md
 !CHANGELOG.md
-!lesson.md
 
 *.md
+!lesson.md
 /app/github
 *.xml
 /github

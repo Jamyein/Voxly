@@ -91,6 +91,9 @@ data class ArtistDetail(
 data object ScanDirectorySettings : NavKey
 
 @Serializable
+data object SourceSettings : NavKey
+
+@Serializable
 data object LogViewer : NavKey
 
 /**

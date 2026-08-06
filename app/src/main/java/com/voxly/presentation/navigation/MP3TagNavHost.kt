@@ -83,7 +83,6 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.components.AnimatedBottomBarContainer
 import com.voxly.presentation.components.FloatingNavBarItem
 import com.voxly.presentation.components.FloatingToolbarNavigationBar
-import com.voxly.presentation.components.LibrarySearchSheet
 import com.voxly.presentation.components.ProvideBottomBarVisibilityController
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.screens.ReplayGainScannerScreen
@@ -96,6 +95,7 @@ import com.voxly.presentation.screens.artist.ArtistDetailScreen
 import com.voxly.presentation.screens.filebrowser.DirectoryContentAdaptiveScreen
 import com.voxly.presentation.screens.filebrowser.FileBrowserAdaptiveScreen
 import com.voxly.presentation.screens.log.LogViewerScreen
+import com.voxly.presentation.screens.settings.SourceSettingsScreen
 import com.voxly.presentation.screens.metadata.LyricsPosterScreen
 import com.voxly.presentation.screens.metadata.LyricsSelectorScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
@@ -604,15 +604,9 @@ private fun MP3TagNavDisplay(
                         topLevelBackStack.add(ArtistDetail(artistGroup.name))
                     },
                     onShowSearchSheet = { showSearchSheet = true },
-                    modifier = Modifier.fillMaxSize(),
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope
-                )
-
-                LibrarySearchSheet(
-                    visible = showSearchSheet,
-                    onDismiss = { showSearchSheet = false },
-                    onFileClick = { audioFile ->
+                    searchActive = showSearchSheet,
+                    onSearchDismiss = { showSearchSheet = false },
+                    onSearchFileClick = { audioFile ->
                         showSearchSheet = false
                         topLevelBackStack.add(
                             MetadataEditor(
@@ -620,7 +614,10 @@ private fun MP3TagNavDisplay(
                                 createAlbumArtSharedElementKey(audioFile.path)
                             )
                         )
-                    }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
 
@@ -765,6 +762,14 @@ private fun MP3TagNavDisplay(
                 )
             }
 
+            entry<SourceSettings>(
+                metadata = sharedAxisXMetadata()
+            ) {
+                SourceSettingsScreen(
+                    onNavigateBack = { topLevelBackStack.removeLast() }
+                )
+            }
+
             @OptIn(ExperimentalMaterial3Api::class)
             entry<LogViewer>(
                 metadata = BottomSheetSceneStrategy.bottomSheet()
@@ -787,6 +792,7 @@ private fun SettingsEntry(topLevelBackStack: TopLevelBackStack<NavKey>, context:
     val logViewerViewModel = hiltViewModel<com.voxly.presentation.screens.log.LogViewerViewModel>()
     SettingsScreen(
         onNavigateBack = { topLevelBackStack.removeLast() },
+        onNavigateToSourceSettings = { topLevelBackStack.add(SourceSettings) },
         onNavigateToLogViewer = { topLevelBackStack.add(LogViewer) },
         onExportLogs = {
             logViewerViewModel.exportLogs(context) { uri ->
