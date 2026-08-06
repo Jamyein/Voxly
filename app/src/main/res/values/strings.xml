@@ -476,6 +476,10 @@
     <string name="log_viewer_delete_confirm">Delete this log file?</string>
     <string name="log_viewer_no_logs">No logs available</string>
     <string name="log_viewer_loading">Loading logs...</string>
+    <string name="log_viewer_result_count">%1$d / %2$d lines</string>
+    <string name="log_viewer_crash_file">Crash</string>
+    <string name="log_viewer_log_file">Log file</string>
+    <string name="log_viewer_copied_line">Line copied</string>
 
     <!-- Dialogs -->
     <string name="dialog_close">Close</string>
@@ -521,6 +525,10 @@
     <string name="settings_separator_delete_cd">Delete separator</string>
     <string name="settings_scan_directory_settings">Scan Directory Settings</string>
     <string name="settings_scan_directory_settings_subtitle">Configure whitelist and blacklist for scanning</string>
+    <string name="scan_directory_section_whitelist">Whitelist</string>
+    <string name="scan_directory_section_blacklist">Blacklist</string>
+    <string name="scan_directory_section_maintenance">Maintenance</string>
+    <string name="rebuild_database_subtitle">Clear all cached data and perform a full rescan</string>
     <string name="settings_whitelist_mode">Whitelist Mode</string>
     <string name="settings_whitelist_mode_subtitle">Only scan selected directories</string>
     <string name="settings_blacklist_mode">Blacklist Mode</string>

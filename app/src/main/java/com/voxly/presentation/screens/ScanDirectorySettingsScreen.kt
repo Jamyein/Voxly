@@ -2,62 +2,85 @@ package com.voxly.presentation.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voxly.R
-import com.voxly.domain.usecase.RebuildDatabaseState
-import com.voxly.presentation.viewmodel.DirectoryManagementViewModel
 import com.voxly.domain.model.WhitelistDirectory
-import kotlinx.coroutines.launch
+import com.voxly.domain.usecase.RebuildDatabaseState
+import com.voxly.presentation.components.SegmentedSwitchRow
+import com.voxly.presentation.components.SettingsSection
+import com.voxly.presentation.components.TopBarTheme
+import com.voxly.presentation.components.VoxlyScaffold
+import com.voxly.presentation.components.VoxlyTopAppBar
+import com.voxly.presentation.components.rememberRoleAccent
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.theme.scaleOnPress
+import com.voxly.presentation.viewmodel.DirectoryManagementViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+// Layout constants
+private val HorizontalPadding = 16.dp
+private val SectionSpacing = 28.dp
+private val CardSpacing = 8.dp
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ScanDirectorySettingsScreen(
     onNavigateBack: () -> Unit,
     viewModel: DirectoryManagementViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val whitelistEnabled by viewModel.whitelistEnabled.collectAsStateWithLifecycle()
     val blacklistEnabled by viewModel.blacklistEnabled.collectAsStateWithLifecycle()
     val directories by viewModel.directories.collectAsStateWithLifecycle()
@@ -200,200 +223,178 @@ fun ScanDirectorySettingsScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp)
-    ) {
-        // BottomSheet header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.settings_scan_directory_settings),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f)
+    VoxlyScaffold(
+        topBar = {
+            VoxlyTopAppBar(
+                large = true,
+                theme = TopBarTheme.Library,
+                title = { Text(stringResource(R.string.settings_scan_directory_settings)) },
+                onBack = onNavigateBack
             )
-            IconButton(onClick = onNavigateBack) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.cd_back)
-                )
-            }
+        },
+        snackbarHost = {
+            SnackbarHost(snackbarHostState)
         }
-        
-        HorizontalDivider()
-        
+    ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = innerPadding.calculateTopPadding())
+                .padding(horizontal = HorizontalPadding),
+            contentPadding = PaddingValues(
+                top = 8.dp,
+                bottom = WindowInsets.navigationBars.asPaddingValues()
+                    .calculateBottomPadding() + 24.dp
+            )
         ) {
+            // Whitelist section
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.extraLarge
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_whitelist_mode),
-                                style = MaterialTheme.typography.titleMedium
+                Column {
+                    SettingsSection(title = stringResource(R.string.scan_directory_section_whitelist)) {
+                        SegmentedSwitchRow(
+                            title = stringResource(R.string.settings_whitelist_mode),
+                            subtitle = stringResource(R.string.settings_whitelist_mode_subtitle),
+                            checked = whitelistEnabled,
+                            onCheckedChange = { viewModel.setWhitelistEnabled(it) }
+                        )
+                    }
+                    if (whitelistEnabled) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AddDirectoryButton(
+                            text = stringResource(R.string.add_whitelist_directory),
+                            onClick = { folderPickerLauncher.launch(null) }
+                        )
+                        Spacer(modifier = Modifier.height(CardSpacing))
+                        if (directories.isEmpty()) {
+                            EmptyDirectoriesState(
+                                text = stringResource(R.string.no_whitelist_directories)
                             )
-                            Switch(
-                                checked = whitelistEnabled,
-                                onCheckedChange = { viewModel.setWhitelistEnabled(it) }
-                            )
+                        } else {
+                            directories.forEach { directory ->
+                                DirectoryCard(
+                                    directory = directory,
+                                    onRemove = { viewModel.removeDirectory(directory.uri) }
+                                )
+                                Spacer(modifier = Modifier.height(CardSpacing))
+                            }
                         }
-                        Text(
-                            text = stringResource(R.string.settings_whitelist_mode_subtitle),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
 
-            if (whitelistEnabled) {
-                item {
-                    TextButton(
-                        onClick = { folderPickerLauncher.launch(null) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(stringResource(R.string.add_whitelist_directory))
-                    }
-                }
+            item { Spacer(modifier = Modifier.height(SectionSpacing)) }
 
-                items(directories, key = { it.uri }) { directory ->
-                    WhitelistDirectoryItem(
-                        directory = directory,
-                        onRemove = { viewModel.removeDirectory(directory.uri) }
-                    )
-                }
-
-                if (directories.isEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.no_whitelist_directories),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-                }
-            }
-
+            // Blacklist section
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.extraLarge
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_blacklist_mode),
-                                style = MaterialTheme.typography.titleMedium
+                Column {
+                    SettingsSection(title = stringResource(R.string.scan_directory_section_blacklist)) {
+                        SegmentedSwitchRow(
+                            title = stringResource(R.string.settings_blacklist_mode),
+                            subtitle = stringResource(R.string.settings_blacklist_mode_subtitle),
+                            checked = blacklistEnabled,
+                            onCheckedChange = { viewModel.setBlacklistEnabled(it) }
+                        )
+                    }
+                    if (blacklistEnabled) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AddDirectoryButton(
+                            text = stringResource(R.string.add_blacklist_directory),
+                            onClick = { blacklistFolderPickerLauncher.launch(null) }
+                        )
+                        Spacer(modifier = Modifier.height(CardSpacing))
+                        if (blacklistDirectories.isEmpty()) {
+                            EmptyDirectoriesState(
+                                text = stringResource(R.string.no_blacklist_directories)
                             )
-                            Switch(
-                                checked = blacklistEnabled,
-                                onCheckedChange = { viewModel.setBlacklistEnabled(it) }
-                            )
+                        } else {
+                            blacklistDirectories.forEach { directory ->
+                                DirectoryCard(
+                                    directory = directory,
+                                    onRemove = { viewModel.removeBlacklistDirectory(directory.uri) }
+                                )
+                                Spacer(modifier = Modifier.height(CardSpacing))
+                            }
                         }
-                        Text(
-                            text = stringResource(R.string.settings_blacklist_mode_subtitle),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
 
-            if (blacklistEnabled) {
-                item {
-                    TextButton(
-                        onClick = { blacklistFolderPickerLauncher.launch(null) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(stringResource(R.string.add_blacklist_directory))
-                    }
-                }
+            item { Spacer(modifier = Modifier.height(SectionSpacing)) }
 
-                items(blacklistDirectories, key = { it.uri }) { directory ->
-                    BlacklistDirectoryItem(
-                        directory = directory,
-                        onRemove = { viewModel.removeBlacklistDirectory(directory.uri) }
-                    )
-                }
-
-                if (blacklistDirectories.isEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.no_blacklist_directories),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-                }
-            }
-
+            // Maintenance section
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(
-                    onClick = { showConfirmDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.rebuild_database))
+                SettingsSection(title = stringResource(R.string.scan_directory_section_maintenance)) {
+                    RebuildDatabaseRow(
+                        onClick = { showConfirmDialog = true }
+                    )
                 }
             }
         }
     }
-    
-    SnackbarHost(snackbarHostState)
 }
 
 @Composable
-private fun WhitelistDirectoryItem(
-    directory: WhitelistDirectory,
-    onRemove: () -> Unit
+private fun AddDirectoryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    FilledTonalButton(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.extraLarge,
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = 14.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Add,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text)
+    }
+}
+
+@Composable
+private fun DirectoryCard(
+    directory: WhitelistDirectory,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = rememberRoleAccent(directory.path)
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Role-accent folder badge
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(accent.container),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = AppIcon.FolderOpen.vector,
+                    contentDescription = null,
+                    tint = accent.onContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = directory.path.substringAfterLast('/').ifBlank { directory.path },
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -405,12 +406,14 @@ private fun WhitelistDirectoryItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(
-                onClick = onRemove
+            FilledTonalIconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.remove_directory)
+                    contentDescription = stringResource(R.string.remove_directory),
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -418,44 +421,84 @@ private fun WhitelistDirectoryItem(
 }
 
 @Composable
-private fun BlacklistDirectoryItem(
-    directory: WhitelistDirectory,
-    onRemove: () -> Unit
+private fun EmptyDirectoriesState(
+    text: String,
+    modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 14.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Icon(
+                imageVector = AppIcon.FolderOutlined.vector,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(22.dp)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun RebuildDatabaseRow(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .scaleOnPress(interactionSource, label = "rebuildDatabaseRow"),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        ),
+        interactionSource = interactionSource,
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(22.dp)
+            )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = directory.path.substringAfterLast('/').ifBlank { directory.path },
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = stringResource(R.string.rebuild_database),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
                 )
                 Text(
-                    text = directory.path,
+                    text = stringResource(R.string.rebuild_database_subtitle),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
                 )
             }
-            IconButton(
-                onClick = onRemove
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.remove_directory)
-                )
-            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.6f)
+            )
         }
     }
 }

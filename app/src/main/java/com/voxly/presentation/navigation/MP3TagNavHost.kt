@@ -753,9 +753,8 @@ private fun MP3TagNavDisplay(
                 )
             }
 
-            @OptIn(ExperimentalMaterial3Api::class)
             entry<ScanDirectorySettings>(
-                metadata = BottomSheetSceneStrategy.bottomSheet()
+                metadata = sharedAxisXMetadata()
             ) {
                 com.voxly.presentation.screens.ScanDirectorySettingsScreen(
                     onNavigateBack = { topLevelBackStack.removeLast() }
@@ -770,10 +769,7 @@ private fun MP3TagNavDisplay(
                 )
             }
 
-            @OptIn(ExperimentalMaterial3Api::class)
-            entry<LogViewer>(
-                metadata = BottomSheetSceneStrategy.bottomSheet()
-            ) {
+            entry<LogViewer> {
                 LogViewerScreen(
                     onBack = { topLevelBackStack.removeLast() }
                 )
