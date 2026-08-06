@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -81,8 +82,29 @@ class LibraryScanViewModel @Inject constructor(
     /** True once the library's initial build finished (data rendered or empty). */
     val libraryInitialized: StateFlow<Boolean> = audioFileScanner.libraryInitialized
 
-    /** Full-text search via FTS4. Offloads filtering to the DB index. */
-    fun searchFiles(query: String): Flow<List<AudioFile>> = musicLibraryCache.searchFiles(query)
+    /**
+     * Unified library search — the ONLY search path in the app (Files tab,
+     * directory contents, Albums, Artists, Home all go through this).
+     *
+     * Filters [allAudios] — the same filtered library flow the UI renders — so
+     * search always sees exactly what the user sees (whitelist/blacklist/
+     * min-duration settings respected by construction, no SQL duplication).
+     * Matching is a case-insensitive substring check over filename, title,
+     * artist and album; works for every script (CJK included) and every
+     * substring position. Filtering runs on [Dispatchers.Default], never on the
+     * main thread; the sheet debounces keystrokes by 250ms before calling.
+     *
+     * History: this used to be a Room FTS4 `MATCH` query, which silently
+     * returned nothing for non-ASCII metadata (the default `simple` tokenizer
+     * only emits ASCII tokens) and ignored the library filters — see lesson #36.
+     */
+    fun searchFiles(query: String): Flow<List<AudioFile>> {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) return flowOf(emptyList())
+        return allAudios.map { files ->
+            files.filter { it.matchesLibrarySearch(q) }
+        }.flowOn(Dispatchers.Default)
+    }
 
     val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
         .stateIn(
@@ -1003,4 +1025,17 @@ class LibraryScanViewModel @Inject constructor(
             }
         }
     }
+}
+
+/**
+ * Case-insensitive substring match used by the unified library search.
+ * [query] must already be trimmed + lowercased. Compares the filename, title,
+ * artist and album; null metadata fields simply don't match.
+ */
+private fun AudioFile.matchesLibrarySearch(query: String): Boolean {
+    if (name.lowercase().contains(query)) return true
+    val metadata = metadata
+    return metadata.title?.lowercase()?.contains(query) == true ||
+        metadata.artist?.lowercase()?.contains(query) == true ||
+        metadata.album?.lowercase()?.contains(query) == true
 }

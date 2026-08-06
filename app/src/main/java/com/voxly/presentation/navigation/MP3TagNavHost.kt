@@ -1,6 +1,5 @@
 package com.voxly.presentation.navigation
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -75,7 +74,6 @@ import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
 import com.voxly.R
-import com.voxly.core.util.LogManager
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
@@ -622,7 +620,7 @@ private fun MP3TagNavDisplay(
             }
 
             entry<Settings>(metadata = fadePageMetadata()) {
-                SettingsEntry(topLevelBackStack, LocalContext.current)
+                SettingsEntry(topLevelBackStack)
             }
 
             entry<DirectoryContent>(
@@ -784,35 +782,12 @@ private fun MP3TagNavDisplay(
 }
 
 @Composable
-private fun SettingsEntry(topLevelBackStack: TopLevelBackStack<NavKey>, context: android.content.Context) {
-    val logViewerViewModel = hiltViewModel<com.voxly.presentation.screens.log.LogViewerViewModel>()
+private fun SettingsEntry(topLevelBackStack: TopLevelBackStack<NavKey>) {
     SettingsScreen(
         onNavigateBack = { topLevelBackStack.removeLast() },
         onNavigateToSourceSettings = { topLevelBackStack.add(SourceSettings) },
         onNavigateToLogViewer = { topLevelBackStack.add(LogViewer) },
-        onExportLogs = {
-            logViewerViewModel.exportLogs(context) { uri ->
-                if (uri != null) {
-                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "application/zip"
-                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(android.content.Intent.createChooser(intent, "Share Logs"))
-                } else {
-                    Toast.makeText(context, R.string.settings_logging_no_logs, Toast.LENGTH_SHORT).show()
-                }
-            }
-        },
-        onNavigateToScanDirectorySettings = { topLevelBackStack.add(ScanDirectorySettings) },
-        onCleanupLogs = {
-            val deletedCount = LogManager.clearAllLogs()
-            Toast.makeText(
-                context,
-                context.getString(R.string.settings_logging_cleanup_complete, deletedCount),
-                Toast.LENGTH_SHORT
-            ).show()
-        }
+        onNavigateToScanDirectorySettings = { topLevelBackStack.add(ScanDirectorySettings) }
     )
 }
 

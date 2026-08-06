@@ -34,9 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
@@ -67,7 +65,7 @@ import com.voxly.R
 import com.voxly.data.local.DirFileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.LibraryRefreshBox
-import com.voxly.presentation.components.SearchBottomSheet
+import com.voxly.presentation.components.InlineLibrarySearchOverlay
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.TopBarTheme
 import com.voxly.presentation.components.VoxlyTopAppBar
@@ -250,6 +248,18 @@ fun DirectoryContentAdaptiveScreen(
                     onClearSelection = { viewModel.clearSelection() },
                     onSelectAll = { viewModel.selectAll() },
                     onShowSearchSheet = { showSearchSheet = true },
+                    searchActive = showSearchSheet,
+                    onSearchDismiss = { showSearchSheet = false },
+                    onSearchFileClick = { audioFile ->
+                        showSearchSheet = false
+                        if (isSinglePane) {
+                            openMetadataFor(onNavigateToMetadata, audioFile)
+                        } else {
+                            coroutineScope.launch {
+                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                            }
+                        }
+                    },
                     onSortOptionChange = { settingsViewModel.setDirectoryFileSortOption(it.name) },
                     onRefresh = { scanViewModel.refreshDirectoryIncremental(directoryUri) },
                     onNavigateBackWithPane = {
@@ -317,21 +327,7 @@ fun DirectoryContentAdaptiveScreen(
         showSingleFileDeleteDialog = showSingleFileDeleteDialog,
         onShowSingleFileDeleteDialogChange = { showSingleFileDeleteDialog = it },
         currentSingleFile = currentSingleFile,
-        selectedFilesCount = selectedFiles.size,
-        showSearchSheet = showSearchSheet,
-        onShowSearchSheetChange = { showSearchSheet = it },
-        files = files,
-        displayedFiles = displayedFiles,
-        isSinglePane = isSinglePane,
-        onNavigateToMetadata = { audioFile ->
-            if (isSinglePane) {
-                openMetadataFor(onNavigateToMetadata, audioFile)
-            } else {
-                coroutineScope.launch {
-                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                }
-            }
-        }
+        selectedFilesCount = selectedFiles.size
     )
 }
 
@@ -358,6 +354,9 @@ private fun DirectoryListPane(
     onClearSelection: () -> Unit,
     onSelectAll: () -> Unit,
     onShowSearchSheet: () -> Unit,
+    searchActive: Boolean = false,
+    onSearchDismiss: () -> Unit = {},
+    onSearchFileClick: (AudioFile) -> Unit = {},
     onSortOptionChange: (DirFileSortOption) -> Unit,
     onRefresh: () -> Unit,
     onNavigateBackWithPane: () -> Unit,
@@ -375,6 +374,13 @@ private fun DirectoryListPane(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val selectedFiles = selectedFilesState.value
+
+    // Force the top bar fully expanded while the search panel is open, so the
+    // panel position under it never jumps when the bar was previously collapsed.
+    LaunchedEffect(searchActive) {
+        if (searchActive) scrollBehavior.state.heightOffset = 0f
+    }
+
     Column(modifier = modifier) {
         DirectoryListTopAppBar(
             directoryName = directoryName,
@@ -394,33 +400,42 @@ private fun DirectoryListPane(
             onNavigateBackWithPane = onNavigateBackWithPane
         )
 
-        DirectoryListBody(
-            files = files,
-            displayedFiles = displayedFiles,
-            isDirectoryLoading = isDirectoryLoading,
-            isRefreshing = isRefreshing,
-            isSelectionMode = isSelectionMode,
-            selectedFilesState = selectedFilesState,
-            canScrollToTop = canScrollToTop,
-            listState = listState,
-            scrollBehavior = scrollBehavior,
-            floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
-            onFileClick = onNavigateToMetadata,
-            onFileLongClick = onFileLongClick,
-            onRefresh = onRefresh,
-            onOnlineMetadata = onOnlineMetadata,
-            onUnifiedField = onUnifiedField,
-            onReplaceText = onReplaceText,
-            onAutoNumber = onAutoNumber,
-            onRenameFiles = onRenameFiles,
-            onFixMetadata = onFixMetadata,
-            onReplayGain = onReplayGain,
-            onSingleFileRename = onSingleFileRename,
-            onSingleFileDelete = onSingleFileDelete,
-            modifier = Modifier.fillMaxSize(),
-            sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScope = animatedVisibilityScope
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            DirectoryListBody(
+                files = files,
+                displayedFiles = displayedFiles,
+                isDirectoryLoading = isDirectoryLoading,
+                isRefreshing = isRefreshing,
+                isSelectionMode = isSelectionMode,
+                selectedFilesState = selectedFilesState,
+                canScrollToTop = canScrollToTop,
+                listState = listState,
+                scrollBehavior = scrollBehavior,
+                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+                onFileClick = onNavigateToMetadata,
+                onFileLongClick = onFileLongClick,
+                onRefresh = onRefresh,
+                onOnlineMetadata = onOnlineMetadata,
+                onUnifiedField = onUnifiedField,
+                onReplaceText = onReplaceText,
+                onAutoNumber = onAutoNumber,
+                onRenameFiles = onRenameFiles,
+                onFixMetadata = onFixMetadata,
+                onReplayGain = onReplayGain,
+                onSingleFileRename = onSingleFileRename,
+                onSingleFileDelete = onSingleFileDelete,
+                modifier = Modifier.fillMaxSize(),
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+
+            InlineLibrarySearchOverlay(
+                visible = searchActive,
+                onDismiss = onSearchDismiss,
+                onFileClick = onSearchFileClick,
+                modifier = Modifier.matchParentSize()
+            )
+        }
     }
 }
 
@@ -721,13 +736,7 @@ private fun DirectoryDialogsAndSheets(
     showSingleFileDeleteDialog: Boolean,
     onShowSingleFileDeleteDialogChange: (Boolean) -> Unit,
     currentSingleFile: AudioFile?,
-    selectedFilesCount: Int,
-    showSearchSheet: Boolean,
-    onShowSearchSheetChange: (Boolean) -> Unit,
-    files: List<AudioFile>,
-    displayedFiles: List<AudioFile>,
-    isSinglePane: Boolean,
-    onNavigateToMetadata: (AudioFile) -> Unit
+    selectedFilesCount: Int
 ) {
     if (showBatchOperationsMenu) {
         BatchOperationsMenuDialog(
@@ -830,24 +839,6 @@ private fun DirectoryDialogsAndSheets(
                 androidx.compose.material3.TextButton(onClick = { onShowSingleFileDeleteDialogChange(false) }) {
                     Text(stringResource(R.string.dialog_cancel))
                 }
-            }
-        )
-    }
-
-    if (showSearchSheet) {
-        SearchBottomSheet(
-            sheetState = rememberBottomSheetState(
-                initialValue = SheetValue.Hidden,
-                enabledValues = setOf(
-                    SheetValue.Hidden,
-                    SheetValue.Expanded
-                )
-            ),
-            onDismiss = { onShowSearchSheetChange(false) },
-            allFiles = files,
-            onFileClick = { audioFile ->
-                onShowSearchSheetChange(false)
-                onNavigateToMetadata(audioFile)
             }
         )
     }

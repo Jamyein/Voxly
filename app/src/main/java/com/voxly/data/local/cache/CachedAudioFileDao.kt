@@ -38,25 +38,6 @@ interface CachedAudioFileDao {
     suspend fun getAudioFileByPath(path: String): CachedAudioFileEntity?
     
     /**
-     * Searches audio files by title, artist, or album using FTS4 full-text search.
-     * Uses MATCH for efficient indexed queries instead of slow LIKE '%query%'.
-     *
-     * Join note: the FTS4 `contentEntity` shadow table is keyed on the base
-     * table's `rowid` (SQLite's implicit 64-bit rowid), NOT on the user-defined
-     * primary key. Previously the join was `cached_audio_files.id = fts.rowid`
-     * which only worked because the previous `id: String` happened to be the
-     * rowid alias. After the v15 refactor `id` no longer exists — we join on
-     * the implicit `rowid` directly.
-     */
-    @Query("""
-        SELECT cached_audio_files.* FROM cached_audio_files
-        JOIN cached_audio_files_fts ON cached_audio_files.rowid = cached_audio_files_fts.rowid
-        WHERE cached_audio_files_fts MATCH :query || '*'
-        ORDER BY cached_audio_files.sortTitle ASC
-    """)
-    fun searchAudioFiles(query: String): Flow<List<CachedAudioFileEntity>>
-    
-    /**
      * Gets count of cached files.
      */
     @Query("SELECT COUNT(*) FROM cached_audio_files")

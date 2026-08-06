@@ -282,24 +282,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setFileLoggingEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.setFileLoggingEnabled(enabled)
-        }
-    }
-
-    fun setConsoleLoggingEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.setConsoleLoggingEnabled(enabled)
-        }
-    }
-
-    fun setCrashReportingEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.setCrashReportingEnabled(enabled)
-        }
-    }
-
     fun setReplayGainTargetLoudness(loudness: Float) {
         viewModelScope.launch {
             settingsDataStore.setReplayGainTargetLoudness(loudness)
@@ -555,9 +537,6 @@ class SettingsViewModel @Inject constructor(
         settingsDataStore.onlineSearchLimitQQMusic,
         sourceConfigurations,
         settingsDataStore.loggingEnabled,
-        settingsDataStore.fileLoggingEnabled,
-        settingsDataStore.consoleLoggingEnabled,
-        settingsDataStore.crashReportingEnabled,
         settingsDataStore.replayGainTargetLoudness,
         settingsDataStore.scanMode,
         settingsDataStore.minDurationFilterEnabled,
@@ -577,14 +556,11 @@ class SettingsViewModel @Inject constructor(
             onlineSearchLimitQQMusic = values[9] as Int,
             sourceConfigurations = values[10] as SourceConfigurations,
             loggingEnabled = values[11] as Boolean,
-            fileLoggingEnabled = values[12] as Boolean,
-            consoleLoggingEnabled = values[13] as Boolean,
-            crashReportingEnabled = values[14] as Boolean,
-            replayGainTargetLoudness = values[15] as Float,
-            scanMode = values[16] as String,
-            minDurationFilterEnabled = values[17] as Boolean,
-            lyricsTimestampFormatEnabled = values[18] as Boolean,
-            floatingBottomNavEnabled = values[19] as Boolean
+            replayGainTargetLoudness = values[12] as Float,
+            scanMode = values[13] as String,
+            minDurationFilterEnabled = values[14] as Boolean,
+            lyricsTimestampFormatEnabled = values[15] as Boolean,
+            floatingBottomNavEnabled = values[16] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), SettingsUiState())
 }

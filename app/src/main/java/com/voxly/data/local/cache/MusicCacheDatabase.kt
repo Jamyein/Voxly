@@ -19,7 +19,6 @@ import javax.inject.Singleton
 @Database(
     entities = [
         CachedAudioFileEntity::class,
-        CachedAudioFileFts::class,
         AlbumThumbnailEntity::class,
         ArtistLinkEntity::class,
         RecentEditEntity::class,
@@ -38,7 +37,12 @@ import javax.inject.Singleton
     // COALESCE in ORDER BY clauses so SQLite can use B-tree indices.
     // v17: added aggregate_snapshot — persisted album/artist structures so
     // cold start renders without re-running the pinyin-sort rebuild.
-    version = 17,
+    // v18: removed the FTS4 `cached_audio_files_fts` virtual table + its sync
+    // triggers. Search no longer uses FTS (the default `simple` tokenizer is
+    // ASCII-only and silently returns nothing for CJK metadata, and it ignored
+    // the library filters — lesson #36); the unified search filters the
+    // already-materialized filtered library flow instead.
+    version = 18,
     exportSchema = false
 )
 /**
@@ -287,6 +291,21 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         """)
                     }
                 })
+                // Migration from version 17 to 18: drops the FTS4 virtual table
+                // and its sync triggers. Search no longer uses FTS (lesson #36);
+                // the unified search filters the materialized filtered-library
+                // flow. DROP TABLE on the virtual table also removes its shadow
+                // tables; the triggers reference it from cached_audio_files and
+                // would error on the next write, so drop them explicitly.
+                .addMigrations(object : Migration(17, 18) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("DROP TRIGGER IF EXISTS `room_fts_content_sync_cached_audio_files_fts_BEFORE_UPDATE`")
+                        db.execSQL("DROP TRIGGER IF EXISTS `room_fts_content_sync_cached_audio_files_fts_BEFORE_DELETE`")
+                        db.execSQL("DROP TRIGGER IF EXISTS `room_fts_content_sync_cached_audio_files_fts_AFTER_UPDATE`")
+                        db.execSQL("DROP TRIGGER IF EXISTS `room_fts_content_sync_cached_audio_files_fts_AFTER_INSERT`")
+                        db.execSQL("DROP TABLE IF EXISTS `cached_audio_files_fts`")
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -313,6 +332,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
         // MUST match the Room @Database(version = ...) annotation above.
         // Bump this whenever you add a new migration or change the version.
-        private const val CURRENT_DATA_FORMAT_VERSION = 17
+        private const val CURRENT_DATA_FORMAT_VERSION = 18
     }
 }

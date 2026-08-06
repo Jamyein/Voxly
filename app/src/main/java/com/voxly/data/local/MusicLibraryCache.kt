@@ -224,11 +224,6 @@ class MusicLibraryCache @Inject constructor(
         if (paths.isEmpty()) emptyList() else audioFileDao.getAudioFilesByPaths(paths).map { it.toAudioFile() }
     }
 
-    /** Full-text search via FTS4. Returns matching [AudioFile]s sorted by title. */
-    fun searchFiles(query: String): Flow<List<AudioFile>> {
-        return audioFileDao.searchAudioFiles(query).map { entities -> entities.map { it.toAudioFile() } }
-    }
-    
     /**
      * Gets the last scan timestamp.
      */

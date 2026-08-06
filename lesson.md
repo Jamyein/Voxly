@@ -175,3 +175,14 @@
 ## 39. 结果列表字段合并：`?:` 不覆盖空字符串 — 空专辑名/空歌名会堵住真实值
 - 元数据搜索页网易云/QQ 源结果"歌手旁不显示专辑"。根因 1：`mergeRelease` 里 `albumTitle = old.albumTitle ?: incoming.albumTitle` —— 网易云 track 搜索在 detail 请求失败时产出 `albumName = ""`（空串而非 null），同 id 另一源的 `albumTitle = "真实专辑"` 用 `?:` 无法覆盖空串，专辑名被永久丢弃（`"" ?: "真名"` = `""`）。根因 2：UI 侧 `albumTitle` 缺失时 fallback 到 `release.title`（歌名），而 `songTitle` 也是 `release.title` → `albumTitle == songTitle` → 显示条件误判为"专辑名==歌名"而隐藏。
 - Rule: 合并 nullable 字段时，凡是数据源可能产出空字符串的字段（`albumTitle`/`songTitle` 等），必须用 `old.takeIf { it.isNotBlank() } ?: incoming` 而非裸 `?:`（后者只处理 null 不处理空串）；与同函数里 `title`/`artist` 的 `isBlank()` 判断保持一致。UI 侧"有专辑才显示"的判断不要 fallback 到歌名去比较——直接 `albumTitle?.takeIf { it.isNotBlank() }` 取真值，缺失就不显示。
+
+## 40. 增量编译 UP-TO-DATE 不验证工作副本——未提交改动中的编译错误要等全量重编译才暴露
+- 会话开始时 `compileGithubDebugKotlin` 显示 "8 tasks UP-TO-DATE / BUILD SUCCESSFUL"，实际工作副本里 `ScanDirectorySettingsScreen.kt`（他人/上一会话未提交的重构）从 `androidx.compose.runtime` 导入了 `MutableInteractionSource`（真实包 `androidx.compose.foundation.interaction`）。改动没触及该文件的依赖时 Gradle 跳过重编译，错误被掩盖；一旦改了 strings.xml 等资源触发 `packageGithubDebugResources` → 全量 Kotlin 重编译，才突然报 3 个 `e:`。Rule: 会话开头的 UP-TO-DATE 编译 ≠ 代码健康；在未提交改动较多的工作副本里做任何修改后，若想确认整个仓库可编译，需要触发一次真正的全量编译（改资源文件、`--rerun-tasks` 或 `clean`），并 grep `^e:` 检查非本文件的错误——增量跳过会隐藏他人遗留的断点，让后续任务在错误的"编译通过"假设上展开。
+
+## 41. 整块删除时 oldText 必须覆盖块的首部（`if`/`fun` 头）到尾部的全部范围
+- 删除第二个确认对话框（`if (pendingDeleteSeparator != null) { AlertDialog(...) }`）时，oldText 只匹配了块的**尾部**（`dismissButton = {...}\n        )\n    }\n}`），newText 为一个 `}`——结果尾部四行被压成一个 `}`：`if` 头、未闭合的 `AlertDialog(` 调用和 confirmButton 悬空在函数体内，函数右花括号被吞，下一个 `@Composable` 头被吞进函数体。Read 检查立刻暴露（`if (pendingDeleteSeparator != null) {` 后面直接跟 `}`），需再补一次 edit 删除悬空块。Lesson #38 讲的是"尾锚被吞"；这次是"头被留下"——同一个工具陷阱的反面。
+- Rule: 删除一个完整块时，oldText 必须从块的第一行（`if (...) {` / `fun ...` 头）覆盖到最后一个右花括号，newText 只保留必须存活的边界（如外层函数的收尾 `}`）；只匹配尾部会让头部悬空。删除后用 Read 复核块边界，或直接编译。
+
+## 42. ColumnScope.AnimatedVisibility 阴影不只在直接接收者上——外层隐式接收者也触发
+- 分隔符对话框里在 `FlexBox` 内容 lambda 中调用 `AnimatedVisibility`，编译报 "'fun ColumnScope.AnimatedVisibility(...)' cannot be called in this context with an implicit receiver"。FlexBox 自身的 `FlexScope` 没有 AnimatedVisibility 扩展，但 `FlexBox` 是 `ColumnScope.FlexBox(...)`（其 content 是 `FlexScope.() -> Unit`），外层 ColumnScope 仍是隐式接收者——阴影来自任何一层的隐式接收者，不限于直接接收者。Lesson #39 的规则正确但没覆盖"外层接收者"这一情况。
+- Rule: 只要某 composable 位于 Column/Row（或 ColumnScope/RowScope 扩展如 FlexBox、FlowRow）内部任意层级，调用顶层 `AnimatedVisibility` 时一律完全限定 `androidx.compose.animation.AnimatedVisibility(...)`，不要依赖"直接接收者无同名扩展"的推断。

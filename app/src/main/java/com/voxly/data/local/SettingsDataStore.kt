@@ -99,9 +99,6 @@ class SettingsDataStore @Inject constructor(
 
         object Logging {
             val ENABLED = booleanPreferencesKey("logging_enabled")
-            val FILE_ENABLED = booleanPreferencesKey("file_logging_enabled")
-            val CONSOLE_ENABLED = booleanPreferencesKey("console_logging_enabled")
-            val CRASH_REPORTING = booleanPreferencesKey("crash_reporting_enabled")
         }
 
         object ReplayGain {
@@ -353,21 +350,6 @@ class SettingsDataStore @Inject constructor(
     val loggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[Logging.ENABLED] ?: true
-        }
-
-    val fileLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[Logging.FILE_ENABLED] ?: true
-        }
-
-    val consoleLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[Logging.CONSOLE_ENABLED] ?: true
-        }
-
-    val crashReportingEnabled: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[Logging.CRASH_REPORTING] ?: true
         }
 
     /**
@@ -734,24 +716,6 @@ class SettingsDataStore @Inject constructor(
     suspend fun setLoggingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[Logging.ENABLED] = enabled
-        }
-    }
-
-    suspend fun setFileLoggingEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[Logging.FILE_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setConsoleLoggingEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[Logging.CONSOLE_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setCrashReportingEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[Logging.CRASH_REPORTING] = enabled
         }
     }
 

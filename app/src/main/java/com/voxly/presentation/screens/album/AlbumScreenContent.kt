@@ -52,6 +52,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.InlineLibrarySearchOverlay
 import com.voxly.presentation.components.LibraryRefreshBox
 import com.voxly.presentation.components.LazyGridCoverPreloader
 import com.voxly.presentation.components.LocalBottomBarVisibilityController
@@ -146,6 +148,9 @@ internal fun AlbumScreenContent(
     viewModel: AlbumViewModel,
     onAlbumClick: (AlbumGroup) -> Unit,
     onShowSearchSheet: () -> Unit,
+    searchActive: Boolean = false,
+    onSearchDismiss: () -> Unit = {},
+    onSearchFileClick: (AudioFile) -> Unit = {},
     modifier: Modifier = Modifier,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
@@ -190,6 +195,12 @@ internal fun AlbumScreenContent(
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Force the top bar fully expanded while the search panel is open, so the
+    // panel position under it never jumps when the bar was previously collapsed.
+    LaunchedEffect(searchActive) {
+        if (searchActive) scrollBehavior.state.heightOffset = 0f
+    }
 
     // Get the bottom-bar visibility controller (provided by the host Scaffold via
     // ProvideBottomBarVisibilityController). Chained on the Scaffold modifier below so the
@@ -254,46 +265,57 @@ internal fun AlbumScreenContent(
             )
         }
     ) { innerPadding ->
-        Surface(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-        ) {
-            LibraryRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { viewModel.refresh() },
-                scrollBehavior = scrollBehavior
+        Box(modifier = modifier.fillMaxSize()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
             ) {
-                if (albums.isEmpty() && !isRefreshing) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = stringResource(R.string.no_albums_found),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    // Key on the sort so the grid is recreated exactly when the re-sorted
-                    // list lands: after a real switch (sortChangeCount > 0) it starts at the
-                    // top; on tab re-entry (fresh composition, count == 0) it restores.
-                    key(currentSortOption) {
-                        AlbumTabContent(
-                            albums = albums,
-                            onAlbumClick = onAlbumClick,
-                            scrollToTopTrigger = scrollToTopTrigger,
-                            sortOption = currentSortOption,
-                            startFromTop = sortChangeCount > 0,
-                            savedScrollPosition = savedScrollPosition,
-                            onSaveScrollPosition = { index, offset ->
-                                val sortKey = previousSortOptionName ?: currentSortOption.name
-                                viewModel.saveScrollPosition("album_list_$sortKey", index, offset)
-                            },
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
+                LibraryRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { viewModel.refresh() },
+                    scrollBehavior = scrollBehavior
+                ) {
+                    if (albums.isEmpty() && !isRefreshing) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = stringResource(R.string.no_albums_found),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        // Key on the sort so the grid is recreated exactly when the re-sorted
+                        // list lands: after a real switch (sortChangeCount > 0) it starts at the
+                        // top; on tab re-entry (fresh composition, count == 0) it restores.
+                        key(currentSortOption) {
+                            AlbumTabContent(
+                                albums = albums,
+                                onAlbumClick = onAlbumClick,
+                                scrollToTopTrigger = scrollToTopTrigger,
+                                sortOption = currentSortOption,
+                                startFromTop = sortChangeCount > 0,
+                                savedScrollPosition = savedScrollPosition,
+                                onSaveScrollPosition = { index, offset ->
+                                    val sortKey = previousSortOptionName ?: currentSortOption.name
+                                    viewModel.saveScrollPosition("album_list_$sortKey", index, offset)
+                                },
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
                     }
                 }
             }
+
+            InlineLibrarySearchOverlay(
+                visible = searchActive,
+                onDismiss = onSearchDismiss,
+                onFileClick = onSearchFileClick,
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+            )
         }
     }
 }

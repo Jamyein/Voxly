@@ -3,11 +3,11 @@ package com.voxly.presentation.screens
 import android.app.Activity
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,9 +44,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -67,15 +70,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -95,6 +99,7 @@ import com.voxly.presentation.components.SortMenuItem
 import com.voxly.presentation.components.TopBarTheme
 import com.voxly.presentation.components.VoxlyScaffold
 import com.voxly.presentation.components.VoxlyTopAppBar
+import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.SettingsViewModel
 import com.voxly.presentation.screens.settings.*
 
@@ -398,8 +403,6 @@ fun SettingsScreen(
     onNavigateToSourceSettings: () -> Unit = {},
     onNavigateToScanDirectorySettings: () -> Unit = {},
     onNavigateToLogViewer: () -> Unit = {},
-    onExportLogs: () -> Unit = {},
-    onCleanupLogs: () -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -414,7 +417,6 @@ fun SettingsScreen(
     var showSearchLimitsDialog by remember { mutableStateOf(false) }
     var showSeparatorDialog by remember { mutableStateOf(false) }
     var separatorInput by remember { mutableStateOf("") }
-    var pendingDeleteSeparator by remember { mutableStateOf<String?>(null) }
     var dialogSeparatorTags by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loudnessExpanded by remember { mutableStateOf(false) }
 
@@ -508,28 +510,11 @@ fun SettingsScreen(
 
             LoggingSettingsSection(
                 loggingEnabled = uiState.loggingEnabled,
-                fileLoggingEnabled = uiState.fileLoggingEnabled,
-                consoleLoggingEnabled = uiState.consoleLoggingEnabled,
-                crashReportingEnabled = uiState.crashReportingEnabled,
                 onSetLoggingEnabled = {
                     LogManager.isLoggingEnabled = it
                     viewModel.setLoggingEnabled(it)
                 },
-                onSetFileLoggingEnabled = {
-                    LogManager.isFileLoggingEnabled = it
-                    viewModel.setFileLoggingEnabled(it)
-                },
-                onSetConsoleLoggingEnabled = {
-                    LogManager.isConsoleLoggingEnabled = it
-                    viewModel.setConsoleLoggingEnabled(it)
-                },
-                onSetCrashReportingEnabled = {
-                    LogManager.isCrashReportingEnabled = it
-                    viewModel.setCrashReportingEnabled(it)
-                },
                 onNavigateToLogViewer = onNavigateToLogViewer,
-                onExportLogs = onExportLogs,
-                onCleanupLogs = onCleanupLogs,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -553,8 +538,6 @@ fun SettingsScreen(
         onDialogSeparatorTagsChange = { dialogSeparatorTags = it },
         separatorInput = separatorInput,
         onSeparatorInputChange = { separatorInput = it },
-        pendingDeleteSeparator = pendingDeleteSeparator,
-        onPendingDeleteSeparatorChange = { pendingDeleteSeparator = it },
         onSetArtistSeparators = viewModel::setArtistSeparators
     )
 
@@ -884,16 +867,8 @@ private fun OnlineSettingsSection(
 @Composable
 private fun LoggingSettingsSection(
     loggingEnabled: Boolean,
-    fileLoggingEnabled: Boolean,
-    consoleLoggingEnabled: Boolean,
-    crashReportingEnabled: Boolean,
     onSetLoggingEnabled: (Boolean) -> Unit,
-    onSetFileLoggingEnabled: (Boolean) -> Unit,
-    onSetConsoleLoggingEnabled: (Boolean) -> Unit,
-    onSetCrashReportingEnabled: (Boolean) -> Unit,
     onNavigateToLogViewer: () -> Unit,
-    onExportLogs: () -> Unit,
-    onCleanupLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     SettingsSection(title = stringResource(R.string.settings_section_logging), modifier = modifier) {
@@ -903,58 +878,20 @@ private fun LoggingSettingsSection(
             checked = loggingEnabled,
             onCheckedChange = onSetLoggingEnabled,
             index = 0,
-            count = 8
-        )
-        SegmentedSwitchRow(
-            title = stringResource(R.string.settings_logging_file),
-            subtitle = stringResource(R.string.settings_logging_file_subtitle),
-            checked = fileLoggingEnabled,
-            onCheckedChange = onSetFileLoggingEnabled,
-            index = 1,
-            count = 8
-        )
-        SegmentedSwitchRow(
-            title = stringResource(R.string.settings_logging_console),
-            subtitle = stringResource(R.string.settings_logging_console_subtitle),
-            checked = consoleLoggingEnabled,
-            onCheckedChange = onSetConsoleLoggingEnabled,
-            index = 2,
-            count = 8
-        )
-        SegmentedSwitchRow(
-            title = stringResource(R.string.settings_logging_crash),
-            subtitle = stringResource(R.string.settings_logging_crash_subtitle),
-            checked = crashReportingEnabled,
-            onCheckedChange = onSetCrashReportingEnabled,
-            index = 3,
-            count = 8
+            count = 3
         )
         SegmentedInfoRow(
             title = stringResource(R.string.settings_logging_size),
             value = LogManager.formatLogSize(LogManager.getLogDirectorySize()),
-            index = 4,
-            count = 8
+            index = 1,
+            count = 3
         )
         SegmentedClickableRow(
             title = stringResource(R.string.settings_logging_view),
             subtitle = stringResource(R.string.settings_logging_view_subtitle),
             onClick = onNavigateToLogViewer,
-            index = 5,
-            count = 8
-        )
-        SegmentedClickableRow(
-            title = stringResource(R.string.settings_logging_export),
-            subtitle = stringResource(R.string.settings_logging_export_subtitle),
-            onClick = onExportLogs,
-            index = 6,
-            count = 8
-        )
-        SegmentedClickableRow(
-            title = stringResource(R.string.settings_logging_cleanup),
-            subtitle = stringResource(R.string.settings_logging_cleanup_subtitle),
-            onClick = onCleanupLogs,
-            index = 7,
-            count = 8
+            index = 2,
+            count = 3
         )
     }
 }
@@ -988,8 +925,6 @@ private fun SettingsInlineDialogs(
     onDialogSeparatorTagsChange: (Set<String>) -> Unit,
     separatorInput: String,
     onSeparatorInputChange: (String) -> Unit,
-    pendingDeleteSeparator: String?,
-    onPendingDeleteSeparatorChange: (String?) -> Unit,
     onSetArtistSeparators: (Set<String>) -> Unit
 ) {
     if (showSeparatorDialog) {
@@ -1003,27 +938,72 @@ private fun SettingsInlineDialogs(
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    FlexBox(
-                        modifier = Modifier.fillMaxWidth(),
-                        config = {
-                            direction(FlexDirection.Row)
-                            wrap(FlexWrap.Wrap)
-                            justifyContent(FlexJustifyContent.Start)
-                            alignItems(FlexAlignItems.Center)
-                            gap(8.dp)
-                        }
-                    ) {
-                        dialogSeparatorTags.forEach { separator ->
-                            SeparatorChip(
-                                separator = separator,
-                                onDelete = { onDialogSeparatorTagsChange(dialogSeparatorTags - separator) },
-                                onLongPress = { onPendingDeleteSeparatorChange(separator) }
+                    // Explain what separators do.
+                    Text(
+                        text = stringResource(R.string.artist_separators_summary),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Chip list (or empty hint) — the container height animates smoothly
+                    // as chips are added/removed so the dialog never snaps.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize(
+                                animationSpec = MaterialTheme.motionScheme.fastSpatialSpec<IntSize>()
                             )
+                    ) {
+                        if (dialogSeparatorTags.isEmpty()) {
+                            Surface(
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_separator_empty_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                )
+                            }
+                        } else {
+                            FlexBox(
+                                modifier = Modifier.fillMaxWidth(),
+                                config = {
+                                    direction(FlexDirection.Row)
+                                    wrap(FlexWrap.Wrap)
+                                    justifyContent(FlexJustifyContent.Start)
+                                    alignItems(FlexAlignItems.Center)
+                                    gap(8.dp)
+                                }
+                            ) {
+                                dialogSeparatorTags.forEach { separator ->
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = true,
+                                        enter = ExpressiveAnimations.fadeEnter(),
+                                        exit = ExpressiveAnimations.fadeExit()
+                                    ) {
+                                        SeparatorInputChip(
+                                            separator = separator,
+                                            onDelete = { onDialogSeparatorTagsChange(dialogSeparatorTags - separator) }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
+                    // Input row — the IME "Done" action adds the separator too.
+                    val addSeparator = {
+                        val trimmed = separatorInput.trim()
+                        if (trimmed.isNotBlank() && trimmed !in dialogSeparatorTags) {
+                            onDialogSeparatorTagsChange(dialogSeparatorTags + trimmed)
+                            onSeparatorInputChange("")
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1032,18 +1012,15 @@ private fun SettingsInlineDialogs(
                         OutlinedTextField(
                             value = separatorInput,
                             onValueChange = onSeparatorInputChange,
-                            label = { Text(stringResource(R.string.artist_separators)) },
+                            label = { Text(stringResource(R.string.settings_separator_input_label)) },
+                            placeholder = { Text(stringResource(R.string.settings_separator_input_placeholder)) },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { addSeparator() }),
                             modifier = Modifier.weight(1f)
                         )
                         FilledTonalButton(
-                            onClick = {
-                                val trimmed = separatorInput.trim()
-                                if (trimmed.isNotBlank() && trimmed !in dialogSeparatorTags) {
-                                    onDialogSeparatorTagsChange(dialogSeparatorTags + trimmed)
-                                    onSeparatorInputChange("")
-                                }
-                            },
+                            onClick = addSeparator,
                             enabled = separatorInput.isNotBlank()
                         ) {
                             Text(stringResource(R.string.settings_separator_add))
@@ -1071,67 +1048,29 @@ private fun SettingsInlineDialogs(
             }
         )
     }
-
-    if (pendingDeleteSeparator != null) {
-        AlertDialog(
-            onDismissRequest = { onPendingDeleteSeparatorChange(null) },
-            shape = MaterialTheme.shapes.large,
-            title = { Text(stringResource(R.string.settings_separator_delete_title)) },
-            text = { Text(stringResource(R.string.settings_separator_delete_message, pendingDeleteSeparator)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDialogSeparatorTagsChange(dialogSeparatorTags - pendingDeleteSeparator)
-                        onPendingDeleteSeparatorChange(null)
-                    }
-                ) {
-                    Text(stringResource(R.string.settings_separator_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { onPendingDeleteSeparatorChange(null) }) {
-                    Text(stringResource(R.string.settings_separator_cancel))
-                }
-            }
-        )
-    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SeparatorChip(
+private fun SeparatorInputChip(
     separator: String,
-    onDelete: () -> Unit,
-    onLongPress: () -> Unit
+    onDelete: () -> Unit
 ) {
-    Surface(
+    InputChip(
+        selected = false,
         onClick = {},
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.pointerInput(separator) {
-            detectTapGestures(onLongPress = { onLongPress() })
-        }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
+        label = {
             Text(
                 text = separator,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                style = MaterialTheme.typography.labelLarge
             )
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.size(18.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.settings_separator_delete_cd),
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                )
-            }
+        },
+        trailingIcon = {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.settings_separator_delete_cd),
+                modifier = Modifier.size(InputChipDefaults.IconSize)
+            )
         }
-    }
+    )
 }

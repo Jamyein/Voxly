@@ -122,6 +122,17 @@ class LogViewerViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    /** Deletes every log/crash file, refreshes the list, then reports how many were removed. */
+    fun clearAllLogs(onComplete: (Int) -> Unit) {
+        viewModelScope.launch {
+            val deleted = withContext(Dispatchers.IO) {
+                LogManager.clearAllLogs()
+            }
+            loadLogFiles()
+            onComplete(deleted)
+        }
+    }
+
     fun exportLogs(context: Context, onComplete: (Uri?) -> Unit) {
         viewModelScope.launch {
             try {

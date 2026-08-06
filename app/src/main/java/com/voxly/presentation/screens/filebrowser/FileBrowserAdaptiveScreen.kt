@@ -27,9 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.AnimatedPane
@@ -68,7 +66,7 @@ import com.voxly.presentation.components.LocalBottomBarVisibilityController
 import com.voxly.presentation.components.TopBarTheme
 import com.voxly.presentation.components.VoxlyTopAppBar
 import com.voxly.presentation.components.chainNestedScrollConnections
-import com.voxly.presentation.components.SearchBottomSheet
+import com.voxly.presentation.components.InlineLibrarySearchOverlay
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
@@ -148,7 +146,6 @@ fun FileBrowserAdaptiveScreen(
 
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
     val scanUiState by scanViewModel.fileBrowserUiState.collectAsStateWithLifecycle()
-    val allAudios = scanUiState.allAudios
     val displayedFiles by scanViewModel.sortedAllAudios.collectAsStateWithLifecycle()
     val selectedDirectories = scanUiState.selectedDirectories
     val directoryFiles = scanUiState.directoryFiles
@@ -276,6 +273,19 @@ fun FileBrowserAdaptiveScreen(
             currentSortOption = currentSortOption,
             onSortOptionChange = { settingsViewModel.setFileBrowserSortOption(it.name) },
             onShowSearchSheet = { showSearchSheet = true },
+            searchActive = showSearchSheet,
+            onSearchDismiss = { showSearchSheet = false },
+            onSearchFileClick = { audioFile ->
+                showSearchSheet = false
+                if (isSinglePane || isExpandedWidth) {
+                    openMetadataFor(onNavigateToMetadata, audioFile)
+                } else {
+                    coroutineScope.launch {
+                        fileSwitchCounter++
+                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                    }
+                }
+            },
             canScrollToTop = canScrollToTop,
             scrollBehavior = scrollBehavior,
             modifier = Modifier.fillMaxSize(),
@@ -318,31 +328,6 @@ fun FileBrowserAdaptiveScreen(
             modifier = modifier.nestedScroll(chainedNestedScroll)
         )
     }
-
-    if (showSearchSheet) {
-        SearchBottomSheet(
-            sheetState = rememberBottomSheetState(
-                initialValue = SheetValue.Hidden,
-                enabledValues = setOf(
-                    SheetValue.Hidden,
-                    SheetValue.Expanded
-                )
-            ),
-            onDismiss = { showSearchSheet = false },
-            allFiles = allAudios,
-            onFileClick = { audioFile ->
-                showSearchSheet = false
-                if (isSinglePane || isExpandedWidth) {
-                    openMetadataFor(onNavigateToMetadata, audioFile)
-                } else {
-                    coroutineScope.launch {
-                        fileSwitchCounter++
-                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                    }
-                }
-            }
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -370,6 +355,9 @@ private fun FileBrowserListPane(
     currentSortOption: FileSortOption,
     onSortOptionChange: (FileSortOption) -> Unit,
     onShowSearchSheet: () -> Unit,
+    searchActive: Boolean = false,
+    onSearchDismiss: () -> Unit = {},
+    onSearchFileClick: (AudioFile) -> Unit = {},
     canScrollToTop: Boolean,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
@@ -378,6 +366,12 @@ private fun FileBrowserListPane(
 ) {
     var isSortExpanded by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+
+    // Force the top bar fully expanded while the search panel is open, so the
+    // panel position under it never jumps when the bar was previously collapsed.
+    LaunchedEffect(searchActive) {
+        if (searchActive) scrollBehavior.state.heightOffset = 0f
+    }
 
     Column(modifier = modifier) {
         VoxlyTopAppBar(
@@ -509,6 +503,13 @@ private fun FileBrowserListPane(
                         )
                     }
                 }
+
+                InlineLibrarySearchOverlay(
+                    visible = searchActive,
+                    onDismiss = onSearchDismiss,
+                    onFileClick = onSearchFileClick,
+                    modifier = Modifier.matchParentSize()
+                )
             }
         }
     }

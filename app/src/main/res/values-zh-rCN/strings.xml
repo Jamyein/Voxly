@@ -354,20 +354,11 @@
     <string name="settings_section_logging">日志</string>
     <string name="settings_logging_enabled">启用日志</string>
     <string name="settings_logging_enabled_subtitle">记录应用使用期间的调试信息</string>
-    <string name="settings_logging_file">文件日志</string>
-    <string name="settings_logging_file_subtitle">将日志保存到本地文件以供后续查看</string>
-    <string name="settings_logging_console">控制台日志</string>
-    <string name="settings_logging_console_subtitle">输出日志到系统日志（仅调试版本）</string>
-    <string name="settings_logging_crash">崩溃报告</string>
-    <string name="settings_logging_crash_subtitle">自动记录未捕获的异常</string>
     <string name="settings_logging_size">日志存储占用</string>
     <string name="settings_logging_view">查看日志</string>
     <string name="settings_logging_view_subtitle">浏览和搜索应用日志</string>
     <string name="settings_logging_export">导出日志</string>
-    <string name="settings_logging_export_subtitle">将所有日志分享为压缩文件</string>
     <string name="settings_logging_cleanup">清理日志</string>
-    <string name="settings_logging_cleanup_subtitle">删除所有日志文件</string>
-    <string name="settings_logging_exported">日志导出成功</string>
     <string name="settings_logging_cleanup_complete">已删除 %d 个日志文件</string>
     <string name="settings_logging_no_logs">没有可导出的日志</string>
 
@@ -394,6 +385,7 @@
     <string name="log_viewer_crash_file">崩溃</string>
     <string name="log_viewer_log_file">日志文件</string>
     <string name="log_viewer_copied_line">已复制该行</string>
+    <string name="log_viewer_cleanup_confirm">删除所有日志文件？此操作无法撤销。</string>
 
     <!-- Dialogs -->
     <string name="dialog_close">关闭</string>
@@ -437,10 +429,9 @@
     <string name="settings_min_duration_threshold_subtitle">跳过短于此时长的文件</string>
     <string name="settings_drag_handle">拖动排序</string>
     <string name="settings_separator_add">添加</string>
-    <string name="settings_separator_delete_title">删除分隔符</string>
-    <string name="settings_separator_delete_message">确定要删除分隔符"%s"吗？</string>
-    <string name="settings_separator_delete">删除</string>
-    <string name="settings_separator_cancel">取消</string>
+    <string name="settings_separator_input_label">分隔符</string>
+    <string name="settings_separator_input_placeholder">例如 &amp; / \\</string>
+    <string name="settings_separator_empty_hint">暂无分隔符，请在下方添加。</string>
     <string name="settings_separator_delete_cd">删除分隔符</string>
     <string name="settings_scan_directory_settings">扫描目录设置</string>
     <string name="settings_scan_directory_settings_subtitle">配置白名单和黑名单</string>

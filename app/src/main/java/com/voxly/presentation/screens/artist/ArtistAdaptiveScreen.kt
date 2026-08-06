@@ -25,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.domain.model.ArtistGroup
-import com.voxly.presentation.components.LibrarySearchSheet
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.openMetadataFor
@@ -124,6 +123,12 @@ fun ArtistAdaptiveScreen(
                 viewModel = viewModel,
                 onArtistClick = onArtistClick,
                 onShowSearchSheet = { showSearchSheet = true },
+                searchActive = showSearchSheet,
+                onSearchDismiss = { showSearchSheet = false },
+                onSearchFileClick = { audioFile ->
+                    showSearchSheet = false
+                    openMetadataFor(onNavigateToMetadata, audioFile)
+                },
                 modifier = Modifier.fillMaxSize(),
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope
@@ -224,14 +229,5 @@ fun ArtistAdaptiveScreen(
             }
         },
         modifier = modifier
-    )
-
-    LibrarySearchSheet(
-        visible = showSearchSheet,
-        onDismiss = { showSearchSheet = false },
-        onFileClick = { audioFile ->
-            showSearchSheet = false
-            openMetadataFor(onNavigateToMetadata, audioFile)
-        }
     )
 }

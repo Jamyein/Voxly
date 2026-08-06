@@ -124,9 +124,8 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
         try {
             val settings = SettingsDataStore(this@MP3TagApplication)
             LogManager.isLoggingEnabled = settings.loggingEnabled.first()
-            LogManager.isFileLoggingEnabled = settings.fileLoggingEnabled.first()
-            LogManager.isConsoleLoggingEnabled = settings.consoleLoggingEnabled.first()
-            LogManager.isCrashReportingEnabled = settings.crashReportingEnabled.first()
+            // File logging, console logging and crash reporting have no user-facing
+            // toggles anymore — they are always enabled (LogManager defaults).
         } catch (e: Exception) {
             Timber.w(e, "Failed to load logging settings, using defaults")
         }

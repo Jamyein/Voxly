@@ -27,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.domain.model.AlbumGroup
-import com.voxly.presentation.components.LibrarySearchSheet
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.openMetadataFor
@@ -115,6 +114,12 @@ fun AlbumAdaptiveScreen(
             viewModel = viewModel,
             onAlbumClick = onAlbumClick,
             onShowSearchSheet = { showSearchSheet = true },
+            searchActive = showSearchSheet,
+            onSearchDismiss = { showSearchSheet = false },
+            onSearchFileClick = { audioFile ->
+                showSearchSheet = false
+                openMetadataFor(onNavigateToMetadata, audioFile)
+            },
             modifier = modifier.fillMaxSize(),
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope
@@ -128,6 +133,12 @@ fun AlbumAdaptiveScreen(
                     viewModel = viewModel,
                     onAlbumClick = onAlbumClick,
                     onShowSearchSheet = { showSearchSheet = true },
+                    searchActive = showSearchSheet,
+                    onSearchDismiss = { showSearchSheet = false },
+                    onSearchFileClick = { audioFile ->
+                        showSearchSheet = false
+                        openMetadataFor(onNavigateToMetadata, audioFile)
+                    },
                     modifier = Modifier.fillMaxSize(),
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
@@ -207,13 +218,4 @@ fun AlbumAdaptiveScreen(
         modifier = modifier
     )
     }
-
-    LibrarySearchSheet(
-        visible = showSearchSheet,
-        onDismiss = { showSearchSheet = false },
-        onFileClick = { audioFile ->
-            showSearchSheet = false
-            openMetadataFor(onNavigateToMetadata, audioFile)
-        }
-    )
 }

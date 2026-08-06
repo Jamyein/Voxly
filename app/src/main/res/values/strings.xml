@@ -440,20 +440,11 @@
     <string name="settings_section_logging">Logging</string>
     <string name="settings_logging_enabled">Enable Logging</string>
     <string name="settings_logging_enabled_subtitle">Record debug information during app usage</string>
-    <string name="settings_logging_file">File Logging</string>
-    <string name="settings_logging_file_subtitle">Save logs to local files for later review</string>
-    <string name="settings_logging_console">Console Logging</string>
-    <string name="settings_logging_console_subtitle">Output logs to system logcat (requires debug build)</string>
-    <string name="settings_logging_crash">Crash Reporting</string>
-    <string name="settings_logging_crash_subtitle">Automatically record uncaught exceptions</string>
     <string name="settings_logging_size">Log Storage Used</string>
     <string name="settings_logging_view">View Logs</string>
     <string name="settings_logging_view_subtitle">Browse and search through application logs</string>
     <string name="settings_logging_export">Export Logs</string>
-    <string name="settings_logging_export_subtitle">Share all logs as a compressed file</string>
     <string name="settings_logging_cleanup">Clean Up Logs</string>
-    <string name="settings_logging_cleanup_subtitle">Delete all log files</string>
-    <string name="settings_logging_exported">Logs exported successfully</string>
     <string name="settings_logging_cleanup_complete">%d log files deleted</string>
     <string name="settings_logging_no_logs">No logs to export</string>
 
@@ -480,6 +471,7 @@
     <string name="log_viewer_crash_file">Crash</string>
     <string name="log_viewer_log_file">Log file</string>
     <string name="log_viewer_copied_line">Line copied</string>
+    <string name="log_viewer_cleanup_confirm">Delete all log files? This cannot be undone.</string>
 
     <!-- Dialogs -->
     <string name="dialog_close">Close</string>
@@ -518,10 +510,9 @@
     <string name="settings_min_duration_threshold_subtitle">Skip files shorter than this</string>
     <string name="settings_drag_handle">Drag to reorder</string>
     <string name="settings_separator_add">Add</string>
-    <string name="settings_separator_delete_title">Delete Separator</string>
-    <string name="settings_separator_delete_message">Are you sure you want to delete the separator "%s"?</string>
-    <string name="settings_separator_delete">Delete</string>
-    <string name="settings_separator_cancel">Cancel</string>
+    <string name="settings_separator_input_label">Separator</string>
+    <string name="settings_separator_input_placeholder">e.g. &amp; / \\</string>
+    <string name="settings_separator_empty_hint">No separators yet — add one below.</string>
     <string name="settings_separator_delete_cd">Delete separator</string>
     <string name="settings_scan_directory_settings">Scan Directory Settings</string>
     <string name="settings_scan_directory_settings_subtitle">Configure whitelist and blacklist for scanning</string>

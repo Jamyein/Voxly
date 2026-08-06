@@ -1,7 +1,6 @@
 package com.voxly.data.local.cache
 
 import androidx.room.Entity
-import androidx.room.Fts4
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.voxly.domain.model.AudioFile
@@ -226,14 +225,3 @@ data class CachedAudioFileEntity(
     }
 }
 
-/**
- * FTS4 entity for full-text search on cached audio files.
- * Provides fast prefix and infix search using MATCH instead of LIKE.
- */
-@Entity(tableName = "cached_audio_files_fts")
-@Fts4(contentEntity = CachedAudioFileEntity::class)
-data class CachedAudioFileFts(
-    val title: String?,
-    val artist: String?,
-    val album: String?
-)

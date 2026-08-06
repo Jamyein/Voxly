@@ -46,6 +46,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
+import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.InlineLibrarySearchOverlay
 import com.voxly.presentation.components.LibraryRefreshBox
 import com.voxly.presentation.components.LazyGridCoverPreloader
 import com.voxly.presentation.components.LocalBottomBarVisibilityController
@@ -65,6 +67,9 @@ internal fun ArtistScreenContent(
     viewModel: ArtistViewModel,
     onArtistClick: (ArtistGroup) -> Unit,
     onShowSearchSheet: () -> Unit,
+    searchActive: Boolean = false,
+    onSearchDismiss: () -> Unit = {},
+    onSearchFileClick: (AudioFile) -> Unit = {},
     modifier: Modifier = Modifier,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
@@ -77,6 +82,12 @@ internal fun ArtistScreenContent(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val gridState = rememberLazyGridState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Force the top bar fully expanded while the search panel is open, so the
+    // panel position under it never jumps when the bar was previously collapsed.
+    LaunchedEffect(searchActive) {
+        if (searchActive) scrollBehavior.state.heightOffset = 0f
+    }
 
     // Get the bottom-bar visibility controller (provided by the host Scaffold via
     // ProvideBottomBarVisibilityController). Chained on the Scaffold modifier below so the
@@ -140,35 +151,46 @@ internal fun ArtistScreenContent(
             )
         }
     ) { innerPadding ->
-        Surface(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-        ) {
-            LibraryRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { viewModel.refresh() },
-                scrollBehavior = scrollBehavior
+        Box(modifier = modifier.fillMaxSize()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
             ) {
-                if (artists.isEmpty() && !isRefreshing) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = stringResource(R.string.no_artists_found),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                LibraryRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { viewModel.refresh() },
+                    scrollBehavior = scrollBehavior
+                ) {
+                    if (artists.isEmpty() && !isRefreshing) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = stringResource(R.string.no_artists_found),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        ArtistTabContent(
+                            artists = artists,
+                            artistListItems = artistListItems,
+                            onArtistClick = onArtistClick,
+                            gridState = gridState,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
-                } else {
-                    ArtistTabContent(
-                        artists = artists,
-                        artistListItems = artistListItems,
-                        onArtistClick = onArtistClick,
-                        gridState = gridState,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
                 }
             }
+
+            InlineLibrarySearchOverlay(
+                visible = searchActive,
+                onDismiss = onSearchDismiss,
+                onFileClick = onSearchFileClick,
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+            )
         }
     }
 }
