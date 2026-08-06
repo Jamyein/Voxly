@@ -13,6 +13,8 @@ import com.voxly.data.remote.tengx.model.TengxSinger
 import com.voxly.data.remote.tengx.model.TengxSong
 import com.voxly.data.remote.tengx.model.TengxSongDetail
 import com.voxly.data.remote.tengx.model.TengxSongResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import timber.log.Timber
@@ -104,13 +106,13 @@ class TengxRepositoryImpl(
         pageNum: Int,
         pageSize: Int,
         type: Int
-    ): Result<TengxSearchResponse> {
+    ): Result<TengxSearchResponse> = withContext(Dispatchers.IO) {
         val page = if (pageNum <= 0) 1 else pageNum
         val size = pageSize.coerceIn(1, 50)
 
         Timber.d(TAG, "Searching QQ Music for: '$keywords' page=$page limit=$size")
 
-        return try {
+        try {
             val param = JsonObject().apply {
                 addProperty("search_id", randomSearchId())
                 addProperty("remoteplace", "search.android.keyboard")
@@ -145,10 +147,13 @@ class TengxRepositoryImpl(
                         Timber.tag("Voxly").i(
                             "TengxRepository searchSongs completed: keywords='$keywords' resultCount=${parsed.data?.song?.totalnum ?: 0}"
                         )
-                        return Result.success(parsed)
+                        Result.success(parsed)
+                    } else {
+                        Result.failure(Exception("QQ Music search returned empty body"))
                     }
+                } else {
+                    Result.failure(Exception("QQ Music search returned empty body"))
                 }
-                return Result.failure(Exception("QQ Music search returned empty body"))
             } else {
                 Result.failure(Exception("QQ Music search failed: ${response.code()}"))
             }
@@ -164,8 +169,8 @@ class TengxRepositoryImpl(
         albumName: String,
         artistName: String,
         duration: Long
-    ): Result<DecodedLyricsResult> {
-        return try {
+    ): Result<DecodedLyricsResult> = withContext(Dispatchers.IO) {
+        try {
             val intervalSec = (duration / 1000).coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
 
             val param = JsonObject().apply {
@@ -202,33 +207,37 @@ class TengxRepositoryImpl(
 
             if (response.isSuccessful) {
                 val raw = response.body()?.string()
-                    ?: return Result.failure(Exception("QQ Music get lyrics returned empty body"))
-
-                val root = JsonParser.parseString(raw).asJsonObject
-                val data = root
-                    .optObject("req_0")
-                    ?.optObject("data")
-                    ?: return Result.failure(Exception("QQ Music get lyrics: missing req_0.data"))
-
-                val qrcEncrypted = data.optString("lyric") ?: ""
-                val transEncrypted = data.optString("trans") ?: ""
-                val romaEncrypted = data.optString("roma") ?: ""
-
-                val qrcText = QQMusicLyricCrypto.decodeLyricPayload(qrcEncrypted)
-                val transText = QQMusicLyricCrypto.decodeLyricPayload(transEncrypted)
-
-                val lrc = if (qrcText.isNotBlank()) {
-                    QQMusicQrcParser.qrcToLrc(qrcText)
+                if (raw == null) {
+                    Result.failure(Exception("QQ Music get lyrics returned empty body"))
                 } else {
-                    ""
-                }
-                val transLrc = if (transText.isNotBlank()) {
-                    QQMusicQrcParser.plainTextToLrc(transText)
-                } else {
-                    ""
-                }
+                    val root = JsonParser.parseString(raw).asJsonObject
+                    val data = root
+                        .optObject("req_0")
+                        ?.optObject("data")
+                    if (data == null) {
+                        Result.failure(Exception("QQ Music get lyrics: missing req_0.data"))
+                    } else {
+                        val qrcEncrypted = data.optString("lyric") ?: ""
+                        val transEncrypted = data.optString("trans") ?: ""
+                        val romaEncrypted = data.optString("roma") ?: ""
 
-                Result.success(DecodedLyricsResult(lyrics = lrc, translatedLyrics = transLrc))
+                        val qrcText = QQMusicLyricCrypto.decodeLyricPayload(qrcEncrypted)
+                        val transText = QQMusicLyricCrypto.decodeLyricPayload(transEncrypted)
+
+                        val lrc = if (qrcText.isNotBlank()) {
+                            QQMusicQrcParser.qrcToLrc(qrcText)
+                        } else {
+                            ""
+                        }
+                        val transLrc = if (transText.isNotBlank()) {
+                            QQMusicQrcParser.plainTextToLrc(transText)
+                        } else {
+                            ""
+                        }
+
+                        Result.success(DecodedLyricsResult(lyrics = lrc, translatedLyrics = transLrc))
+                    }
+                }
             } else {
                 Result.failure(Exception("QQ Music get lyrics failed: ${response.code()}"))
             }
@@ -238,8 +247,8 @@ class TengxRepositoryImpl(
         }
     }
 
-    override suspend fun getSongDetail(songIds: List<Long>): Result<TengxSongDetail> {
-        return try {
+    override suspend fun getSongDetail(songIds: List<Long>): Result<TengxSongDetail> = withContext(Dispatchers.IO) {
+        try {
             val response = api.getSongDetail(songIds = songIds.joinToString(","))
             if (response.isSuccessful) {
                 val body = response.body()
@@ -253,8 +262,8 @@ class TengxRepositoryImpl(
         }
     }
 
-    override suspend fun getAlbumDetail(albumId: Long): Result<TengxAlbumDetail> {
-        return try {
+    override suspend fun getAlbumDetail(albumId: Long): Result<TengxAlbumDetail> = withContext(Dispatchers.IO) {
+        try {
             val response = api.getAlbumDetail(albumId = albumId)
             if (response.isSuccessful) {
                 val body = response.body()

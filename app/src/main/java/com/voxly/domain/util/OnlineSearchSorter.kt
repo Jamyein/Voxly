@@ -7,19 +7,35 @@ import com.voxly.domain.repository.OnlineSource
 
 /**
  * 统一的在线搜索结果排序工具
- * 
- * 排序策略（相关性绝对主导）：
- * 1. 标题匹配权重 2x，艺术家匹配权重 1x
- * 2. 相关性分数放大 100 倍作为基础分
- * 3. 源优先级仅在难分胜负时生效（每级差 2 分）
- * 4. 未知源大幅降权（-500），确保垫底
+ *
+ * 排序策略（字典序分层，无权重魔法数字）：
+ * 排序键 = (相关性档位 tier, 数据源排名 sourceRank, 相关性细分数 relevance)
+ *
+ * 1. tier 绝对主导：强相关永远在弱相关之前（高相关性更靠前）
+ * 2. sourceRank 同档内生效：设置页拖拽的数据源优先级（高优先级更靠前）
+ * 3. relevance 同档同源内细分：相似度越高越靠前
+ *
+ * 等价于组合分 tier × 源数量 + sourceRank：相关性每高一档跨越全部源排名，
+ * 数据源优先级只在同一相关性档位内起作用 —— 高优先级 + 高相关性 = 最靠前。
  */
 object OnlineSearchSorter {
-    
-    private const val RELEVANCE_SCALE = 100        // 相关性放大系数
-    private const val PRIORITY_BONUS_STEP = 2      // 每级优先级差 2 分（仅打破平局）
-    private const val UNKNOWN_SOURCE_PENALTY = -500 // 未知源大幅降权
-    
+
+    // 相关性匹配档位：rank 越低越相关
+    private enum class MatchTier(val rank: Int) {
+        EXACT(0),   // 完全匹配（忽略大小写 / 括号 / 简繁）
+        PREFIX(1),  // 前缀匹配
+        CONTAINS(2),// 包含匹配
+        FUZZY(3),   // 模糊匹配（Levenshtein 达到阈值）
+        NONE(4)     // 无匹配
+    }
+
+    // 排序键（字典序）
+    private data class RankKey(
+        val tier: Int,          // 相关性档位（绝对主导）
+        val sourceRank: Int,    // 数据源优先级排名（同档内）
+        val relevance: Int      // 细分数（同档同源内）
+    )
+
     /**
      * 排序 OnlineRecording 列表（封面搜索）
      */
@@ -33,73 +49,44 @@ object OnlineSearchSorter {
             items = recordings,
             title = title,
             artist = artist,
+            album = null,
             sourcePriority = sourcePriority,
             getTitle = { it.title },
             getArtist = { it.artist },
+            getAlbum = { null },
             getSource = { it.source }
         )
     }
-    
+
     /**
      * 排序 OnlineRelease 列表（元数据搜索）
+     *
+     * @param album 专辑查询词（searchByArtistAlbum 时 title 为空、album 为主查询词）
      */
     fun sortReleases(
         releases: List<OnlineRelease>,
         title: String,
         artist: String?,
+        album: String? = null,
         sourcePriority: List<String>
     ): List<OnlineRelease> {
         return sortGenericItems(
             items = releases,
             title = title,
             artist = artist,
+            album = album,
             sourcePriority = sourcePriority,
             getTitle = { (it.songTitle ?: it.albumTitle ?: it.title).trim() },
             getArtist = { it.artist },
+            getAlbum = { it.albumTitle ?: it.title },
             getSource = { it.source }
         )
     }
-    
-    /**
-     * 通用排序逻辑，被 sortRecordings 和 sortReleases 复用
-     * 
-     * 排序原则：相关性绝对主导，优先级仅在同一匹配度层级内生效
-     */
-    private inline fun <T> sortGenericItems(
-        items: List<T>,
-        title: String,
-        artist: String?,
-        sourcePriority: List<String>,
-        crossinline getTitle: (T) -> String,
-        crossinline getArtist: (T) -> String,
-        crossinline getSource: (T) -> OnlineSource
-    ): List<T> {
-        if (items.isEmpty()) return emptyList()
-        
-        val titleNeedle = title.trim()
-        val artistNeedle = artist?.trim().orEmpty()
-        val maxPriority = sourcePriority.size.coerceAtLeast(1)
-        
-        return items.sortedByDescending { item ->
-            val relevanceScore = calculateRelevanceScore(
-                title = getTitle(item),
-                artist = getArtist(item),
-                titleNeedle = titleNeedle,
-                artistNeedle = artistNeedle
-            )
-            val sourcePriorityIndex = getSourcePriorityIndex(getSource(item), sourcePriority)
-            
-            when {
-                sourcePriorityIndex == -1 -> relevanceScore * RELEVANCE_SCALE + UNKNOWN_SOURCE_PENALTY
-                else -> relevanceScore * RELEVANCE_SCALE + (maxPriority - 1 - sourcePriorityIndex) * PRIORITY_BONUS_STEP
-            }
-        }
-    }
-    
+
     /**
      * 排序 OnlineLyricsResult 列表（歌词搜索）
-     * 
-     * 与通用排序一致，额外增加同步歌词加分
+     *
+     * 与通用排序一致，额外增加同步歌词加分（同档同源内细分）。
      */
     fun sortLyrics(
         lyrics: List<OnlineLyricsResult>,
@@ -108,73 +95,132 @@ object OnlineSearchSorter {
         sourcePriority: List<String>
     ): List<OnlineLyricsResult> {
         if (lyrics.isEmpty()) return emptyList()
-        
+
         val titleNeedle = title.trim()
         val artistNeedle = artist?.trim().orEmpty()
         val maxPriority = sourcePriority.size.coerceAtLeast(1)
-        
-        return lyrics.sortedByDescending { lyric ->
-            val relevanceScore = calculateRelevanceScore(
-                title = lyric.trackName,
-                artist = lyric.artistName,
-                titleNeedle = titleNeedle,
-                artistNeedle = artistNeedle
-            )
-            
-            val syncedBonus = if (lyric.hasSyncedLyrics) 2 else 0
-            val adjustedRelevanceScore = relevanceScore + syncedBonus
-            
-            val sourcePriorityIndex = getLyricsSourcePriorityIndex(lyric.source, sourcePriority)
-            
-            when {
-                sourcePriorityIndex == -1 -> adjustedRelevanceScore * RELEVANCE_SCALE + UNKNOWN_SOURCE_PENALTY
-                else -> adjustedRelevanceScore * RELEVANCE_SCALE + (maxPriority - 1 - sourcePriorityIndex) * PRIORITY_BONUS_STEP
+        val priorityIndex = sourcePriority.withIndex()
+            .associate { (idx, name) -> normalizeLyricsSourceName(name) to idx }
+
+        // Decorate-sort-undecorate：每个元素只算一次排序键
+        return lyrics
+            .map { lyric ->
+                val titleMatch = matchLevel(lyric.trackName, titleNeedle)
+                val artistMatch = matchLevel(lyric.artistName, artistNeedle)
+                val sourceRank = getLyricsSourcePriorityIndex(lyric.source, priorityIndex)
+                    .let { if (it < 0) maxPriority else it }
+                val syncedBonus = if (lyric.hasSyncedLyrics) 1 else 0
+                val relevance =
+                    (lyric.trackName to titleNeedle).similarity * 3 +
+                    (lyric.artistName to artistNeedle).similarity +
+                    syncedBonus
+                lyric to RankKey(
+                    computeTier(titleMatch, artistMatch, MatchTier.NONE),
+                    sourceRank,
+                    (relevance * 1000).toInt()
+                )
             }
-        }
-    }
-    
-    /**
-     * 计算相关性分数（范围 3-11）
-     * 标题匹配分数(2-6) + 歌手名匹配分数(1-3) + 同步歌词加分(0-2)
-     *
-     * 匹配等级：
-     * - 完全匹配: 3
-     * - 包含: 2
-     * - 部分匹配(基于Levenshtein距离): 1.0-2.0
-     * - 不匹配: 1
-     */
-    private fun calculateRelevanceScore(
-        title: String,
-        artist: String,
-        titleNeedle: String,
-        artistNeedle: String
-    ): Int {
-        val titleScore = calculateMatchScore(title, titleNeedle) * 2   // 标题权重 2x：2-6
-        val artistScore = calculateMatchScore(artist, artistNeedle)     // 艺术家权重 1x：1-3
-        return titleScore + artistScore                                  // 总计：3-9
+            .sortedWith(rankKeyComparator())
+            .map { it.first }
     }
 
     /**
-     * 计算单个字段的匹配分数 (1-3)
-     * 
-     * 精确匹配始终获得最高分，Levenshtein 部分匹配永远不会超过精确匹配
+     * 通用排序逻辑：字典序 (tier, sourceRank, relevance)
      */
-    private fun calculateMatchScore(haystack: String, needle: String): Int {
-        if (needle.isBlank()) return 1
-        if (haystack.equals(needle, ignoreCase = true)) return 3
-        if (haystack.contains(needle, ignoreCase = true)) return 2
+    private inline fun <T> sortGenericItems(
+        items: List<T>,
+        title: String,
+        artist: String?,
+        album: String?,
+        sourcePriority: List<String>,
+        crossinline getTitle: (T) -> String,
+        crossinline getArtist: (T) -> String,
+        crossinline getAlbum: (T) -> String?,
+        crossinline getSource: (T) -> OnlineSource
+    ): List<T> {
+        if (items.isEmpty()) return emptyList()
+
+        val titleNeedle = title.trim()
+        val artistNeedle = artist?.trim().orEmpty()
+        val albumNeedle = album?.trim().orEmpty()
+        val maxPriority = sourcePriority.size.coerceAtLeast(1)
+        val priorityIndex = sourcePriority.withIndex()
+            .associate { (idx, name) -> name.lowercase() to idx }
+
+        // Decorate-sort-undecorate：每个元素只计算一次排序键（Levenshtein 不重算），保持稳定排序。
+        return items
+            .map { item ->
+                val itemTitle = getTitle(item)
+                val itemArtist = getArtist(item)
+                val itemAlbum = getAlbum(item)
+
+                val titleMatch = matchLevel(itemTitle, titleNeedle)
+                val artistMatch = matchLevel(itemArtist, artistNeedle)
+                val albumMatch = if (itemAlbum != null) matchLevel(itemAlbum, albumNeedle) else MatchTier.NONE
+
+                val sourceRank = getSourcePriorityIndex(getSource(item), priorityIndex)
+                    .let { if (it < 0) maxPriority else it }
+                val relevance =
+                    (itemTitle to titleNeedle).similarity * 3 +
+                    (itemAlbum?.let { it to albumNeedle }?.similarity ?: 0.0) * 2 +
+                    (itemArtist to artistNeedle).similarity
+
+                item to RankKey(
+                    tier = computeTier(titleMatch, artistMatch, albumMatch),
+                    sourceRank = sourceRank,
+                    relevance = (relevance * 1000).toInt()
+                )
+            }
+            .sortedWith(rankKeyComparator())
+            .map { it.first }
+    }
+
+    /**
+     * 相关性档位（绝对主导）：
+     * tier 0 标题完全匹配
+     * tier 1 标题前缀匹配，或专辑完全匹配
+     * tier 2 标题包含匹配，或专辑包含匹配，或歌手完全匹配
+     * tier 3 模糊匹配或仅歌手匹配
+     * tier 4 无匹配
+     */
+    private fun computeTier(titleMatch: MatchTier, artistMatch: MatchTier, albumMatch: MatchTier): Int = when {
+        titleMatch.rank <= MatchTier.EXACT.rank -> 0
+        titleMatch.rank <= MatchTier.PREFIX.rank || albumMatch.rank <= MatchTier.EXACT.rank -> 1
+        titleMatch.rank <= MatchTier.CONTAINS.rank ||
+            albumMatch.rank <= MatchTier.CONTAINS.rank ||
+            artistMatch.rank <= MatchTier.EXACT.rank -> 2
+        titleMatch.rank <= MatchTier.FUZZY.rank ||
+            albumMatch.rank <= MatchTier.FUZZY.rank ||
+            artistMatch.rank <= MatchTier.CONTAINS.rank -> 3
+        else -> 4
+    }
+
+    private fun rankKeyComparator(): Comparator<Pair<Any?, RankKey>> = compareBy<Pair<Any?, RankKey>> { it.second.tier }
+        .thenBy { it.second.sourceRank }
+        .thenByDescending { it.second.relevance }
+
+    /**
+     * 计算单个字段的匹配档位
+     */
+    private fun matchLevel(haystack: String, needle: String): MatchTier {
+        if (needle.isBlank()) return MatchTier.NONE
+        if (haystack.equals(needle, ignoreCase = true)) return MatchTier.EXACT
+        if (haystack.startsWith(needle, ignoreCase = true)) return MatchTier.PREFIX
+        if (haystack.contains(needle, ignoreCase = true)) return MatchTier.CONTAINS
 
         val similarity = levenshteinSimilarity(haystack.lowercase(), needle.lowercase())
-        return when {
-            similarity >= 0.7 -> 2  // 高相似度视为包含级别
-            similarity >= 0.4 -> {
-                // 线性映射 0.4-0.7 到 1.0-2.0，确保不超过精确匹配
-                val normalized = (similarity - 0.4) / 0.3  // 0.0-1.0
-                1.0 + normalized  // 1.0-2.0
-            }
-            else -> 1
-        }.toInt()
+        return if (similarity >= 0.7) MatchTier.FUZZY else MatchTier.NONE
     }
+
+    /** 相似度（0.0-1.0），用于同档同源内细分；needle 为空时返回 0 */
+    private val Pair<String, String>.similarity: Double
+        get() {
+            val (haystack, needle) = this
+            if (needle.isBlank()) return 0.0
+            if (haystack.equals(needle, ignoreCase = true)) return 1.0
+            if (haystack.contains(needle, ignoreCase = true)) return 0.9
+            return levenshteinSimilarity(haystack.lowercase(), needle.lowercase())
+        }
 
     /**
      * 计算两个字符串的 Levenshtein 相似度 (0.0-1.0)
@@ -220,31 +266,26 @@ object OnlineSearchSorter {
 
         return prev[len2]
     }
-    
+
     /**
-     * 获取数据源在优先级列表中的索引
+     * 获取数据源在优先级列表中的索引（-1 表示不在列表中）
      */
-    private fun getSourcePriorityIndex(source: OnlineSource, priority: List<String>): Int {
-        return priority.indexOfFirst {
-            it.equals(source.name, ignoreCase = true)
-        }
+    private fun getSourcePriorityIndex(source: OnlineSource, priorityIndex: Map<String, Int>): Int {
+        return priorityIndex[source.name.lowercase()] ?: -1
     }
 
     /**
-     * 获取歌词数据源在优先级列表中的索引
+     * 获取歌词数据源在优先级列表中的索引（-1 表示不在列表中）
      */
-    private fun getLyricsSourcePriorityIndex(source: String, priority: List<String>): Int {
-        val normalizedSource = normalizeLyricsSourceName(source)
-        return priority.indexOfFirst { priorityName ->
-            normalizeLyricsSourceName(priorityName) == normalizedSource
-        }
+    private fun getLyricsSourcePriorityIndex(source: String, priorityIndex: Map<String, Int>): Int {
+        return priorityIndex[normalizeLyricsSourceName(source)] ?: -1
     }
 
     /**
      * 标准化歌词源名称
      */
     private val SOURCE_NAME_NORMALIZER = Regex("[\\s_-]+")
-    
+
     private fun normalizeLyricsSourceName(source: String): String {
         return source.lowercase().replace(SOURCE_NAME_NORMALIZER, "").replace("music", "")
     }

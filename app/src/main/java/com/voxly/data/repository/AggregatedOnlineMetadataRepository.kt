@@ -16,6 +16,7 @@ import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.OnlineSourceResult
+import com.voxly.domain.util.OnlineSearchSorter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -726,10 +727,13 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         album: String,
         settings: OnlineSourceSettings
     ): List<OnlineRelease> {
-        val sorted = releases.sortedWith(
-            compareBy<OnlineRelease> { release ->
-                sourcePriorityIndex(release.source, settings.metadataPriority)
-            }
+        // 复用统一的字典序分层排序：相关性档位主导 + 数据源优先级同档生效（与 flow 路径一致）
+        val sorted = OnlineSearchSorter.sortReleases(
+            releases = releases,
+            title = "",
+            artist = artist,
+            album = album,
+            sourcePriority = settings.metadataPriority
         )
         return applyLimit(sorted, settings.searchLimit)
     }

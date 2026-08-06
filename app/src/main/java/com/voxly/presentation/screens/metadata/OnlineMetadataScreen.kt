@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,8 +22,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -64,7 +59,6 @@ import com.voxly.presentation.theme.emphasizedTitleMedium
 import androidx.compose.material3.toShape
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
-import com.voxly.presentation.viewmodel.SearchProgressState
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -253,8 +247,8 @@ private fun OnlineReleaseList(
                         ) {
                             val songTitle = release.songTitle?.ifBlank { release.title.ifBlank { "-" } }
                                 ?: release.title.ifBlank { "-" }
-                            val albumTitle = release.albumTitle?.ifBlank { release.title.ifBlank { "-" } }
-                                ?: release.title.ifBlank { "-" }
+                            // 只在有真实专辑名时显示，不 fallback 到 title（title 可能是歌名，与 songTitle 混淆会误隐藏）
+                            val albumTitle = release.albumTitle?.takeIf { it.isNotBlank() }
                             Text(
                                 text = songTitle,
                                 style = emphasizedTitleMedium,
@@ -265,7 +259,7 @@ private fun OnlineReleaseList(
                             Text(
                                 text = buildString {
                                     release.artist.ifBlank { null }?.let { append(it) }
-                                    if (albumTitle != "-" && albumTitle != songTitle) {
+                                    if (albumTitle != null && albumTitle != songTitle) {
                                         if (isNotEmpty()) append(" · ")
                                         append(albumTitle)
                                     }
@@ -299,145 +293,6 @@ private fun LoadingBox() {
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun SearchProgressIndicator(
-    searchState: SearchProgressState,
-    modifier: Modifier = Modifier
-) {
-    val allSources = listOf(OnlineSource.ITUNES, OnlineSource.QQ_MUSIC, OnlineSource.NETEASE, OnlineSource.MUSICBRAINZ)
-    val startedSources = searchState.startedSources
-    val completedSources = searchState.completedSources
-    val errorSources = searchState.errorSources
-    val isSearching = searchState.isSearching
-    val isLyricsSearching = searchState.isLyricsSearching
-    val resultCount = searchState.results.size
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            // Status line with source indicators
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                allSources.forEach { source ->
-                    val isCompleted = source in completedSources
-                    val hasError = source in errorSources
-
-                    SourceStatusChip(
-                        name = source.toDisplayString(),
-                        isCompleted = isCompleted,
-                        hasError = hasError
-                    )
-
-                    if (source != allSources.last()) {
-                        Text(
-                            text = " ",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Progress text with wavy Linear Progress Indicator
-            val statusText = buildString {
-                append("已找到 $resultCount 个结果")
-                if (isSearching) {
-                    append("，正在搜索更多...")
-                } else if (isLyricsSearching) {
-                    append("，正在加载歌词...")
-                }
-            }
-
-            // Indeterminate: unknown progress and wait time - wavy style
-            // Determinate: known progress - fill from 0% to 100%
-            // 使用实际搜索的源数量计算进度，而不是固定的4个源
-            val hasKnownProgress = completedSources.isNotEmpty() || errorSources.isNotEmpty()
-            val linearProgress = if (hasKnownProgress && startedSources.isNotEmpty()) {
-                (completedSources.size + errorSources.size).toFloat() / startedSources.size.coerceAtLeast(1)
-            } else {
-                0f
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (hasKnownProgress) {
-                    // Determinate: known progress - show exact progress (0% to 100%)
-                    LinearProgressIndicator(
-                        progress = { linearProgress },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(6.dp)
-                            .clip(MaterialTheme.shapes.extraSmall),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeCap = StrokeCap.Round,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                } else {
-                    // Indeterminate: unknown progress and wait time - wavy style
-                    LinearWavyProgressIndicator(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(6.dp)
-                            .clip(MaterialTheme.shapes.extraSmall),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        wavelength = 20.dp
-                    )
-                }
-
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.widthIn(max = 150.dp)
-                )
-            }
-
-            // Show errors if any
-            if (errorSources.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                errorSources.forEach { (source, error) ->
-                    Text(
-                        text = "$source: $error",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SourceStatusChip(
-    name: String,
-    isCompleted: Boolean,
-    hasError: Boolean
-) {
-    val color = when {
-        hasError -> MaterialTheme.colorScheme.error
-        isCompleted -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.outline
-    }
-
-    Text(
-        text = if (hasError) "$name ✗" else if (isCompleted) "$name ✓" else "$name...",
-        style = MaterialTheme.typography.labelSmall,
-        color = color
-    )
-}
-
 @Composable
 private fun ReleaseCover(
     coverArtUrl: String?,

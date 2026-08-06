@@ -25,30 +25,36 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import timber.log.Timber
 import java.io.File
 import java.net.URLDecoder
 
-@OptIn(FlowPreview::class)
 @HiltViewModel(assistedFactory = OnlineMetadataViewModel.Factory::class)
 class OnlineMetadataViewModel @AssistedInject constructor(
     @Assisted val navKey: OnlineMetadata,
@@ -62,23 +68,34 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
     private val filePath: String = navKey.filePath
 
-    private val _uiState = MutableStateFlow<OnlineMetadataUiState>(OnlineMetadataUiState.Idle)
-    val uiState: StateFlow<OnlineMetadataUiState> = _uiState.asStateFlow()
-
-    private val _searchResults = MutableStateFlow<List<OnlineRelease>>(emptyList())
-    val searchResults: StateFlow<List<OnlineRelease>> = _searchResults.asStateFlow()
-
     private val _searchState = MutableStateFlow(SearchProgressState())
     val searchState: StateFlow<SearchProgressState> = _searchState.asStateFlow()
+
+    // 单一状态源：_searchState。UI 使用的其余流均派生自它（lesson #25 派生而非快照），
+    // 避免 publishLegacySearchState 手动同步多份副本时的遗漏与重复重组。
+    val uiState: StateFlow<OnlineMetadataUiState> = _searchState
+        .map { it.toUiState() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, OnlineMetadataUiState.Idle)
+
+    val searchResults: StateFlow<List<OnlineRelease>> = _searchState
+        .map { it.results }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // selectRelease 获取详情/封面的独立加载状态（区别于搜索结果加载）
+    private val _isSelectingRelease = MutableStateFlow(false)
+
+    val isLoading: StateFlow<Boolean> = combine(
+        _searchState,
+        _isSelectingRelease
+    ) { state, selecting ->
+        state.isSearching || state.isLyricsSearching || selecting
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _selectedRelease = MutableStateFlow<OnlineReleaseDetails?>(null)
     val selectedRelease: StateFlow<OnlineReleaseDetails?> = _selectedRelease.asStateFlow()
 
     private val _selectedReleaseCandidate = MutableStateFlow<OnlineRelease?>(null)
     val selectedReleaseCandidate: StateFlow<OnlineRelease?> = _selectedReleaseCandidate.asStateFlow()
-
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _searchQuery = MutableStateFlow(OnlineSearchQuery())
     val searchQuery: StateFlow<OnlineSearchQuery> = _searchQuery.asStateFlow()
@@ -95,6 +112,13 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     
     // 从设置中获取的元数据源优先级
     private var metadataSourcePriority: List<String> = emptyList()
+
+    // 批量缓冲：立即显示前 N 条，其余按 200ms/10 条批量合并+排序一次（对齐封面搜索策略）
+    private companion object {
+        private const val IMMEDIATE_DISPLAY_COUNT = 5
+        private const val BATCH_UPDATE_INTERVAL_MS = 200L
+        private const val BATCH_FLUSH_COUNT = 10
+    }
     
     // 预下载的封面图
     private val _downloadedAlbumArt = MutableStateFlow<ByteArray?>(null)
@@ -110,9 +134,10 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     init {
         viewModelScope.launch {
             // 监听元数据源优先级设置变化，实时更新
-            // 使用 debounce 防止设置变化时触发频繁的搜索操作
+            // 初始值由下方 first() + prepareAutoSearch 提供；drop(1) 只收后续变更，
+            // 避免 debounce 窗口内旧值覆盖新值导致的排序回退
             settingsDataStore.metadataSourcePriority
-                .debounce(500)
+                .drop(1)
                 .collect { priority ->
                     metadataSourcePriority = priority
                 }
@@ -197,85 +222,122 @@ class OnlineMetadataViewModel @AssistedInject constructor(
             try {
                 _syncedLyricsByReleaseId.update { emptyMap() }
                 _searchState.update { SearchProgressState(isSearching = true) }
-                publishLegacySearchState()
+
+                // 批量缓冲：前 N 条立即显示（不排序），其余按 200ms/10 条批量合并+排序一次。
+                // 排序在 Dispatchers.Default 执行，避免 Levenshtein 计算阻塞主线程（lesson #37）。
+                val pending = mutableListOf<OnlineRelease>()
+                var receivedCount = 0
+                var lastBatchAt = System.currentTimeMillis()
+
+                suspend fun flushBatch() {
+                    if (pending.isEmpty()) return
+                    val batch = pending.toList()
+                    pending.clear()
+                    // 合并+排序整体在 Default 线程执行；collect 在单协程内顺序执行，
+                    // withContext 期间不会插入新的 state 写入，快照安全。
+                    val sorted = withContext(Dispatchers.Default) {
+                        val merged = mergeReleases(_searchState.value.results, batch)
+                        OnlineSearchSorter.sortReleases(
+                            releases = merged,
+                            title = query.title,
+                            artist = query.artist,
+                            album = query.album,
+                            sourcePriority = metadataSourcePriority
+                        )
+                    }
+                    _searchState.update { state ->
+                        state.copy(results = sorted, hasAnyResults = sorted.isNotEmpty())
+                    }
+                    lastBatchAt = System.currentTimeMillis()
+                }
 
                 searcher.collect { result ->
                     when (result) {
                         is OnlineSourceResult.ReleaseResult -> {
-                            // Track that this source has started
-                            _searchState.update { state ->
-                                state.copy(startedSources = state.startedSources + result.source)
-                            }
-
                             val normalized = result.release.copy(
                                 albumTitle = result.release.albumTitle ?: result.release.title,
                                 source = if (result.release.source == OnlineSource.UNKNOWN) result.source else result.release.source
                             )
-                            _searchState.update { state ->
-                                val merged = mergeRelease(state.results, normalized)
-                                val sorted = OnlineSearchSorter.sortReleases(
-                                    releases = merged,
-                                    title = query.title,
-                                    artist = query.artist,
-                                    sourcePriority = metadataSourcePriority
-                                )
-                                state.copy(results = sorted, hasAnyResults = sorted.isNotEmpty())
+                            receivedCount++
+                            if (receivedCount <= IMMEDIATE_DISPLAY_COUNT) {
+                                // 立即显示（不排序），保证首帧结果立刻出现
+                                _searchState.update { state ->
+                                    val merged = mergeRelease(state.results, normalized)
+                                    state.copy(
+                                        results = merged,
+                                        hasAnyResults = merged.isNotEmpty(),
+                                        startedSources = state.startedSources + result.source
+                                    )
+                                }
+                            } else {
+                                pending.add(normalized)
+                                _searchState.update { state ->
+                                    state.copy(startedSources = state.startedSources + result.source)
+                                }
+                                val now = System.currentTimeMillis()
+                                if (pending.size >= BATCH_FLUSH_COUNT || now - lastBatchAt >= BATCH_UPDATE_INTERVAL_MS) {
+                                    flushBatch()
+                                }
                             }
-                            publishLegacySearchState()
                         }
 
                         is OnlineSourceResult.RecordingResult -> {
-                            // Track that this source has started
-                            _searchState.update { state ->
-                                state.copy(startedSources = state.startedSources + result.source)
-                            }
-
                             val release = result.recording.toOnlineRelease() ?: return@collect
-                            _searchState.update { state ->
-                                val merged = mergeRelease(state.results, release)
-                                val sorted = OnlineSearchSorter.sortReleases(
-                                    releases = merged,
-                                    title = query.title,
-                                    artist = query.artist,
-                                    sourcePriority = metadataSourcePriority
-                                )
-                                state.copy(results = sorted, hasAnyResults = sorted.isNotEmpty())
+                            receivedCount++
+                            if (receivedCount <= IMMEDIATE_DISPLAY_COUNT) {
+                                _searchState.update { state ->
+                                    val merged = mergeRelease(state.results, release)
+                                    state.copy(
+                                        results = merged,
+                                        hasAnyResults = merged.isNotEmpty(),
+                                        startedSources = state.startedSources + result.source
+                                    )
+                                }
+                            } else {
+                                pending.add(release)
+                                _searchState.update { state ->
+                                    state.copy(startedSources = state.startedSources + result.source)
+                                }
+                                val now = System.currentTimeMillis()
+                                if (pending.size >= BATCH_FLUSH_COUNT || now - lastBatchAt >= BATCH_UPDATE_INTERVAL_MS) {
+                                    flushBatch()
+                                }
                             }
-                            publishLegacySearchState()
                         }
 
                         is OnlineSourceResult.SourceCompleted -> {
+                            flushBatch()
                             _searchState.update { state ->
                                 state.copy(
                                     completedSources = state.completedSources + result.source,
                                     startedSources = state.startedSources + result.source
                                 )
                             }
-                            publishLegacySearchState()
                         }
 
                         is OnlineSourceResult.Error -> {
+                            flushBatch()
                             _searchState.update { state ->
                                 state.copy(
                                     errorSources = state.errorSources + (result.source to result.message),
                                     startedSources = state.startedSources + result.source
                                 )
                             }
-                            publishLegacySearchState()
                         }
                     }
                 }
+
+                // 最后的剩余缓冲
+                flushBatch()
 
                 // 检查搜索是否已过时（用户触发了新搜索）
                 if (isSearchOutdated(searchId)) {
                     // 标记搜索已完成，避免 UI 卡在搜索状态
                     _searchState.update { it.copy(isSearching = false, isLyricsSearching = false) }
-                    publishLegacySearchState()
                     return@launch
                 }
 
                 _searchState.update { it.copy(isSearching = false, isLyricsSearching = true) }
-                publishLegacySearchState()
                 enrichReleasesWithSyncedLyricsIncremental(query, searchId)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -286,7 +348,6 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                         errorSources = state.errorSources + (OnlineSource.UNKNOWN to (e.message ?: "Search failed"))
                     )
                 }
-                publishLegacySearchState()
             }
         }
     }
@@ -307,8 +368,9 @@ class OnlineMetadataViewModel @AssistedInject constructor(
             trackCount = old.trackCount ?: incoming.trackCount,
             coverArtUrl = old.coverArtUrl ?: incoming.coverArtUrl,
             source = if (old.source == OnlineSource.UNKNOWN) incoming.source else old.source,
-            songTitle = old.songTitle ?: incoming.songTitle,
-            albumTitle = old.albumTitle ?: incoming.albumTitle,
+            // 空字符串也是"缺失"：网易云/QQ 可能产出 albumTitle=""，若用 ?: 会堵住后续真实专辑名
+            songTitle = old.songTitle?.takeIf { it.isNotBlank() } ?: incoming.songTitle,
+            albumTitle = old.albumTitle?.takeIf { it.isNotBlank() } ?: incoming.albumTitle,
             discNumber = old.discNumber ?: incoming.discNumber,
             discCount = old.discCount ?: incoming.discCount
         )
@@ -322,27 +384,30 @@ class OnlineMetadataViewModel @AssistedInject constructor(
         return results.toMutableList().also { it[existingIndex] = merged }
     }
 
-    private fun publishLegacySearchState() {
-        val state = _searchState.value
-        _searchResults.update { state.results }
-        _isLoading.update { state.isSearching || state.isLyricsSearching }
+    /**
+     * 批量合并：用 id→index 索引一次性归并多条结果，避免逐条 O(n) 线性查找。
+     * 保持现有顺序（已排序列表在前，新结果追加在尾部），稳定性与逐条 mergeRelease 一致。
+     */
+    private fun mergeReleases(results: List<OnlineRelease>, incoming: List<OnlineRelease>): List<OnlineRelease> {
+        if (incoming.isEmpty()) return results
+        if (results.isEmpty()) return incoming
 
-        _uiState.update {
-            when {
-                state.isSearching && state.results.isEmpty() -> OnlineMetadataUiState.Searching
-                (state.isSearching || state.isLyricsSearching) && state.results.isNotEmpty() -> {
-                    OnlineMetadataUiState.PartialResults(state.results)
-                }
-                state.results.isNotEmpty() -> OnlineMetadataUiState.Results(state.results)
-                state.errorSources.isNotEmpty() -> {
-                    OnlineMetadataUiState.Error(
-                        state.errorSources.values.firstOrNull() ?: "Search failed"
-                    )
-                }
-                !state.isSearching && !state.isLyricsSearching -> OnlineMetadataUiState.NoResults
-                else -> OnlineMetadataUiState.Searching
+        val indexById = HashMap<String, Int>(results.size * 2)
+        results.forEachIndexed { index, release ->
+            indexById.putIfAbsent(release.id, index)
+        }
+
+        val merged = results.toMutableList()
+        incoming.forEach { incomingRelease ->
+            val existingIndex = indexById[incomingRelease.id]
+            if (existingIndex != null) {
+                merged[existingIndex] = mergeRelease(merged[existingIndex], incomingRelease)
+            } else {
+                indexById[incomingRelease.id] = merged.size
+                merged.add(incomingRelease)
             }
         }
+        return merged
     }
 
     private fun enrichReleasesWithSyncedLyricsIncremental(
@@ -356,17 +421,20 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                 if (limited.isEmpty()) {
                     if (!isSearchOutdated(searchId)) {
                         _searchState.update { it.copy(isLyricsSearching = false) }
-                        publishLegacySearchState()
                     }
                     return@launch
                 }
 
                 _syncedLyricsByReleaseId.update { emptyMap() }
 
+                // 限制歌词预取的并发（最多 5 个），避免对搜索结果一次性发起 30×3=90 个网络请求
+                val lyricsSemaphore = Semaphore(5)
                 coroutineScope {
                     val deferred: List<kotlinx.coroutines.Deferred<Pair<String, Lyrics?>>> = limited.map { release ->
                         async {
-                            release.id to fetchSyncedLyrics(release)
+                            lyricsSemaphore.withPermit {
+                                release.id to fetchSyncedLyrics(release)
+                            }
                         }
                     }
 
@@ -389,28 +457,26 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                         }
                     }
 
-                    // Single state update for UI
-                    _searchState.update { state ->
-                        val updatedResults = state.results.map { release ->
+                    // Single state update for UI — 排序在 Default 线程执行（lesson #37）
+                    val sorted = withContext(Dispatchers.Default) {
+                        val updatedResults = _searchState.value.results.map { release ->
                             release.copy(hasSyncedLyrics = updatedLyricsMap.containsKey(release.id))
                         }
-                        val sorted = OnlineSearchSorter.sortReleases(
+                        OnlineSearchSorter.sortReleases(
                             releases = updatedResults,
                             title = query.title,
                             artist = query.artist,
+                            album = query.album,
                             sourcePriority = metadataSourcePriority
-                        )
-                        state.copy(
-                            results = sorted,
-                            hasAnyResults = updatedResults.isNotEmpty()
-                        )
+                        ) to updatedResults.isNotEmpty()
                     }
-                    publishLegacySearchState()
+                    _searchState.update { state ->
+                        state.copy(results = sorted.first, hasAnyResults = sorted.second)
+                    }
                 }
             } finally {
                 if (!isSearchOutdated(searchId)) {
                     _searchState.update { it.copy(isLyricsSearching = false) }
-                    publishLegacySearchState()
                 }
             }
         }
@@ -574,7 +640,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                 }
 
                 launch {
-                    _isLoading.update { true }
+                    _isSelectingRelease.update { true }
                     try {
                         setRepositoryPreferredSource(release.source)
                         Timber.d("selectRelease: calling getReleaseDetails for ${release.id}")
@@ -624,7 +690,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                         _selectedRelease.update { null }
                     } finally {
                         setRepositoryPreferredSource(OnlineSource.UNKNOWN)
-                        _isLoading.update { false }
+                        _isSelectingRelease.update { false }
                         Timber.d("selectRelease: coroutine finished, isLoading=false")
                     }
                 }
@@ -810,7 +876,22 @@ data class SearchProgressState(
     val isSearching: Boolean = false,
     val isLyricsSearching: Boolean = false,
     val hasAnyResults: Boolean = false
-)
+) {
+    fun toUiState(): OnlineMetadataUiState = when {
+        isSearching && results.isEmpty() -> OnlineMetadataUiState.Searching
+        (isSearching || isLyricsSearching) && results.isNotEmpty() -> {
+            OnlineMetadataUiState.PartialResults(results)
+        }
+        results.isNotEmpty() -> OnlineMetadataUiState.Results(results)
+        errorSources.isNotEmpty() -> {
+            OnlineMetadataUiState.Error(
+                errorSources.values.firstOrNull() ?: "Search failed"
+            )
+        }
+        !isSearching && !isLyricsSearching -> OnlineMetadataUiState.NoResults
+        else -> OnlineMetadataUiState.Searching
+    }
+}
 
 sealed class OnlineMetadataUiState {
     data object Idle : OnlineMetadataUiState()

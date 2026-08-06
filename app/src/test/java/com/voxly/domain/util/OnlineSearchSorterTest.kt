@@ -254,10 +254,10 @@ class OnlineSearchSorterTest {
     }
 
     @Test
-    fun `sortLyrics - unknown source with exact match still ranks below known source with partial match`() {
+    fun `sortLyrics - exact match always outranks partial match regardless of source`() {
         val lyrics = listOf(
-            createLyrics("Target Song", "Artist", hasSynced = false, source = "UnknownSource"),
-            createLyrics("Target S", "Artist", hasSynced = false, source = "NetEase")
+            createLyrics("Target S", "Artist", hasSynced = false, source = "NetEase"),
+            createLyrics("Target Song", "Artist", hasSynced = false, source = "UnknownSource")
         )
 
         val result = OnlineSearchSorter.sortLyrics(
@@ -267,9 +267,10 @@ class OnlineSearchSorterTest {
             sourcePriority = listOf("netease")
         )
 
-        // Known source with partial match should outrank unknown source with exact match
-        assertEquals("NetEase", result[0].source)
-        assertEquals("UnknownSource", result[1].source)
+        // 字典序分层：相关性档位绝对主导（tier 0 exact > tier 1 prefix），
+        // 源优先级只在同档位内生效 —— exact match 即使来自未知源也排在最前
+        assertEquals("UnknownSource", result[0].source)
+        assertEquals("NetEase", result[1].source)
     }
 
     // endregion
