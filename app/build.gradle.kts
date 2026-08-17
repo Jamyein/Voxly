@@ -243,7 +243,7 @@ dependencies {
 
     // Google Fonts - Variable Font支持 (使用Compose BOM中的版本)
     implementation("androidx.compose.ui:ui-text-google-fonts:1.11.4")
-    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.appcompat:appcompat:1.8.0")
 
     // Navigation 3 - 使用新的导航架构解决退出页面点击穿透问题
     implementation("androidx.navigation3:navigation3-runtime:1.1.5")
